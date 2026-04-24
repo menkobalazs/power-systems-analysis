@@ -16,7 +16,7 @@ np.random.seed(42) # fix random seed for reproducibility
 ### Constants and Configurations ###
 ####################################
 
-data_path = 'data/' + 'Adatok_HU_250.xlsx'
+data_path = 'data/' + 'Adatok_HU_2050.xlsx'
 cost_params = ['operation', 'environment', 'risk', 'reliability']
 week_numbers =  {'week_15':15, 'week_28':28, 'week_40':40, 'week_49':49}
 seasons = {'Spring': 1, 'Summer': 2, 'Autumn': 3, 'Winter': 4}
@@ -63,6 +63,8 @@ def change_costs(costs, technologies=[], cost_params=cost_params, function=lambd
     np.random.seed(42) # fix random seed for reproducibility
     if function == 'uniform':
         function = np.random.uniform
+    elif function == 'linear':
+        function = np.linspace
     # elif function == ...   ### Todo: add more predefined functions if needed
     if not technologies:
         technologies = costs.keys()
@@ -111,7 +113,7 @@ def change_storage_max_pot(seed, min=100, max=3000):
 ### Visualization Functions ###
 ###############################
 
-def plot_generator_t(network, dates, season, day, colors=tech_colors, country=None):
+def plot_generator_t(network, dates, season, day, colors=tech_colors, country=None, demand=[]):
     """
     Plot the optimal energy generation dispatch for a specific season and day, including storage unit activity.
     """
@@ -124,7 +126,7 @@ def plot_generator_t(network, dates, season, day, colors=tech_colors, country=No
     start = dates[season-1][(day-1)*24] 
     end = dates[season-1][(day-1)*24+23]
     #---------
-    technologies = np.array(list(tech_colors.keys()))[:-2]
+    technologies = network.generators_t.p.keys()
     if type(country) == str: country = int(country.split('_')[1])
     elif type(country) == int or country == None: pass
     else: raise ValueError("country should be either a string like 'country_1'"+\
@@ -137,21 +139,25 @@ def plot_generator_t(network, dates, season, day, colors=tech_colors, country=No
     else:
         generators_t_p = network.generators_t.p
         storage_units_t_p = network.storage_units_t.p
-    generators_t_p = generators_t_p[technologies[(generators_t_p.mean() > 0).values]].loc[start:end]
+    generators_t_p = generators_t_p.loc[start:end, generators_t_p.abs().sum() > 0]
     generators_t_p.index = generators_t_p.index.hour
     generators_t_p = generators_t_p[generators_t_p.max().sort_values(ascending=False).index]# Sort columns by mean generation descending
     ax = generators_t_p.plot(kind='bar', figsize=(10,5), stacked=True, color=colors)
-    storage_units_t_p = storage_units_t_p.loc[start:end]
-    storage_units_t_p.index = storage_units_t_p.index.hour
-    storage_units_t_p = storage_units_t_p.loc[:, storage_units_t_p.abs().sum() > 0]  # only active storages
-    storage_units_t_p.plot(ax=ax, style='-o', linewidth=1.5, markersize=4, legend=True, color=colors)
+    if storage_units_t_p.shape[1]:
+        storage_units_t_p = storage_units_t_p.loc[start:end]
+        storage_units_t_p.index = storage_units_t_p.index.hour
+        storage_units_t_p = storage_units_t_p.loc[:, storage_units_t_p.abs().sum() > 0]  # only active storages
+        storage_units_t_p.plot(ax=ax, style='-o', linewidth=1.5, markersize=4, legend=True, color=colors)
+    if len(demand): 
+        ax.plot(demand[24*(day-1):24*day], 'o--', color='black', linewidth=1.5, markersize=4, label='Demand')
     ax.legend(bbox_to_anchor=(1, 1), loc='upper left', fontsize=7)
     ax.set_xlabel('Time [h]')
     ax.set_ylabel('Power [MWh]')
     ax.set_ylim(np.round(storage_units_t_p.sum(axis=1).min(), -2)-100, 
           np.round(generators_t_p.sum(axis=1).max(), -2)+100)
     ax.set_title(f"Optimal Energy Generation Dispatch\n{list(seasons.keys())[season-1]} -- Day {day}"+\
-                 f" -- Country {country}" if country is not None else "")
+                 (f" -- Country {country}" if country is not None else "")
+                )
     ax.set_xticks(range(0, len(generators_t_p.index)))
     ax.set_xticklabels(generators_t_p.index, rotation=0)
     plt.tight_layout()
