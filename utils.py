@@ -73,7 +73,7 @@ def change_costs(costs, technologies=[], cost_params=cost_params, function=lambd
             costs[k][p] = function(*args, **kwargs) * costs[k][p] if type(costs[k][p]) == float else costs[k][p]
     return None
 
-def change_generator_max_pot(seed=137, number_of_powerplant=[2,3,4,4]):
+def change_generator_p_nom_max(seed=137, number_of_powerplant=[2,3,4,4]):
     """
     Change the maximum potential of generators for each technology by generating random values.
     Parameters:
@@ -94,7 +94,7 @@ def change_generator_max_pot(seed=137, number_of_powerplant=[2,3,4,4]):
     combined.extend([0] * number_of_powerplant[3])  # Add zeros for technologies with no potential
     return np.array(combined)[np.random.permutation(sum(number_of_powerplant))]
 
-def change_storage_max_pot(seed, min=100, max=3000):
+def change_storage_p_nom_max(seed, min=100, max=3000):
     """
     Change the maximum potential of storage units by generating random values.
     Parameters:
@@ -126,12 +126,16 @@ def plot_generator_t(network, dates, season, day, colors=tech_colors, country=No
     start = dates[season-1][(day-1)*24] 
     end = dates[season-1][(day-1)*24+23]
     #---------
-    technologies = network.generators_t.p.keys()
     if type(country) == str: country = int(country.split('_')[1])
     elif type(country) == int or country == None: pass
     else: raise ValueError("country should be either a string like 'country_1'"+\
                            " or an integer representing the country number or None.")    
+
     if country != None:
+        if 'nicename' in network.generators.keys():
+            technologies=network.generators.nicename.values[country*13:(country+1)*13]
+        else:
+            technologies=network.generators.index
         generators_t_p = network.generators_t.p.iloc[:, country*13:(country+1)*13]
         generators_t_p.columns = technologies
         storage_units_t_p = network.storage_units_t.p.iloc[:, country*2:(country+1)*2]
@@ -153,8 +157,9 @@ def plot_generator_t(network, dates, season, day, colors=tech_colors, country=No
     ax.legend(bbox_to_anchor=(1, 1), loc='upper left', fontsize=7)
     ax.set_xlabel('Time [h]')
     ax.set_ylabel('Power [MWh]')
-    ax.set_ylim(np.round(storage_units_t_p.sum(axis=1).min(), -2)-100, 
-          np.round(generators_t_p.sum(axis=1).max(), -2)+100)
+    if len(demand)==0:
+        ax.set_ylim(np.round(storage_units_t_p.sum(axis=1).min(), -2)-100, 
+            np.round(generators_t_p.sum(axis=1).max(), -2)+100)
     ax.set_title(f"Optimal Energy Generation Dispatch\n{list(seasons.keys())[season-1]} -- Day {day}"+\
                  (f" -- Country {country}" if country is not None else "")
                 )
