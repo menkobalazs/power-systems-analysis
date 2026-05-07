@@ -148,18 +148,18 @@ def plot_generator_t(network, dates, season, day, colors=tech_colors, country=No
     generators_t_p = generators_t_p[generators_t_p.max().sort_values(ascending=False).index]# Sort columns by mean generation descending
     ax = generators_t_p.plot(kind='bar', figsize=(10,5), stacked=True, color=colors)
     if storage_units_t_p.shape[1]:
+        storage_units_t_p = storage_units_t_p.loc[:, storage_units_t_p.abs().sum() > 0]  # only active storages
         storage_units_t_p = storage_units_t_p.loc[start:end]
         storage_units_t_p.index = storage_units_t_p.index.hour
-        storage_units_t_p = storage_units_t_p.loc[:, storage_units_t_p.abs().sum() > 0]  # only active storages
         storage_units_t_p.plot(ax=ax, style='-o', linewidth=1.5, markersize=4, legend=True, color=colors)
     if len(demand): 
         ax.plot(demand[24*(day-1):24*day], 'o--', color='black', linewidth=1.5, markersize=4, label='Demand')
+    else:
+        ax.set_ylim(np.round(storage_units_t_p.sum(axis=1).min(), -2)-100, 
+                       np.round(generators_t_p.sum(axis=1).max(), -2)+100)
     ax.legend(bbox_to_anchor=(1, 1), loc='upper left', fontsize=7)
     ax.set_xlabel('Time [h]')
     ax.set_ylabel('Power [MWh]')
-    if len(demand)==0:
-        ax.set_ylim(np.round(storage_units_t_p.sum(axis=1).min(), -2)-100, 
-            np.round(generators_t_p.sum(axis=1).max(), -2)+100)
     ax.set_title(f"Optimal Energy Generation Dispatch\n{list(seasons.keys())[season-1]} -- Day {day}"+\
                  (f" -- Country {country}" if country is not None else "")
                 )
