@@ -153,7 +153,8 @@ def plot_generator_t(network, dates, season, day, colors=tech_colors, country=No
         storage_units_t_p.index = storage_units_t_p.index.hour
         storage_units_t_p.plot(ax=ax, style='-o', linewidth=1.5, markersize=4, legend=True, color=colors)
     if len(demand): 
-        ax.plot(demand[24*(day-1):24*day], 'o--', color='black', linewidth=1.5, markersize=4, label='Demand')
+        ax.plot(demand[24*(7*(season-1)+day-1):24*(7*(season-1)+day)], 
+                'o--', color='black', linewidth=1.5, markersize=4, label='Demand')
     else:
         ax.set_ylim(np.round(storage_units_t_p.sum(axis=1).min(), -2)-100, 
                        np.round(generators_t_p.sum(axis=1).max(), -2)+100)
