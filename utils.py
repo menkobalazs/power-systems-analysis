@@ -49,7 +49,7 @@ tech_colors = {
 ### Data Manipulation Functions ###
 ###################################
 
-def change_costs(costs, technologies=[], cost_params=cost_params, function=lambda *args, **kwargs: 1, *args, **kwargs):
+def change_costs(costs, technologies=[], cost_params=cost_params, allow_rand_seed=True, function=lambda *args, **kwargs: 1, *args, **kwargs):
     """
     Change the costs of specified technology parameters by applying a given function to them. 
     Parameters:
@@ -60,11 +60,13 @@ def change_costs(costs, technologies=[], cost_params=cost_params, function=lambd
       It can also take additional arguments and keyword arguments for more complex modifications.
     - *args, **kwargs: additional arguments and keyword arguments to be passed to the function. 
     """
-    np.random.seed(42) # fix random seed for reproducibility
+    if allow_rand_seed: np.random.seed(42) # fix random seed for reproducibility
     if function == 'uniform':
         function = np.random.uniform
     elif function == 'linear':
         function = np.linspace
+    elif function == 'constant':
+        function = lambda x:x
     # elif function == ...   ### Todo: add more predefined functions if needed
     if not technologies:
         technologies = costs.keys()
