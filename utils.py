@@ -5,6 +5,7 @@
 import re
 import os
 import pypsa
+import itertools
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -19,7 +20,7 @@ np.random.seed(42) # fix random seed for reproducibility
 ####################################
 
 data_path = 'data/' + 'Adatok_HU_2050.xlsx'
-cost_params = ['environment', 'operation', 'reliability', 'risk']
+cost_params = ['capital', 'environment', 'operation', 'reliability', 'risk']
 week_numbers =  {'week_15':15, 'week_28':28, 'week_40':40, 'week_49':49}
 seasons = {'Spring': 1, 'Summer': 2, 'Autumn': 3, 'Winter': 4}
 technologies = ['Solar', 'Wind Offshore', 'Wind Onshore', 'Hydro Run-of-river', 'Hydro Water Reservoir', 'Geothermal', 'Biomass', 'Waste', 'Fossil Lignite', 'Fossil Hard coal', 'Fossil Gas', 'Nuclear','Fusion']
@@ -69,8 +70,6 @@ def build_and_optimize_network(name, generator_costs, storage_costs, dates, dema
             p_max_pu = np.repeat(profile_PV.values, 7, axis=1).flatten('F')
         elif technology == 'Wind Onshore':
             p_max_pu = np.repeat(profile_wind.values, 7, axis=1).flatten('F')
-        elif technology == 'Nuclear':
-            p_min_pu = 0.8
         
         network.add(
             "Generator", name=str(technology), bus="country_0",
@@ -79,7 +78,7 @@ def build_and_optimize_network(name, generator_costs, storage_costs, dates, dema
             p_nom_max=potentials_generator.loc['p_nom_max'][str(technology)],
             p_nom_min=potentials_generator.loc['p_nom_min'][str(technology)],
             capital_cost=generator_costs[str(technology)]['capital'],
-            marginal_cost=sum([generator_costs[str(technology)][key] for key in cost_params]),
+            marginal_cost=sum([generator_costs[str(technology)][key] for key in cost_params[1:]]),
             p_max_pu=p_max_pu, p_min_pu=p_min_pu,
             ramp_limit_up=potentials_generator.loc['ramp_up'][str(technology)],
             ramp_limit_down=potentials_generator.loc['ramp_down'][str(technology)]
@@ -92,7 +91,7 @@ def build_and_optimize_network(name, generator_costs, storage_costs, dates, dema
             p_nom_extendable=True,
             p_nom_max=potentials_storage.loc['p_nom_max'][str(technology)],
             capital_cost=storage_costs[str(technology)]['capital'],
-            marginal_cost=sum([storage_costs[str(technology)][key] for key in cost_params]),
+            marginal_cost=sum([storage_costs[str(technology)][key] for key in cost_params[1:]]),
         )
 
     network.sanitize()
@@ -304,7 +303,7 @@ def plot_links(network, dates, season, day):
     plt.show()
 
 def create_heatmap(data, subtitle=''):
-    plt.figure(figsize=(12,8))
+    plt.figure(figsize=(12,6))
     norm = colors.SymLogNorm(
         linthresh=1.0, 
         vmin=data.min().min(), 
@@ -325,18 +324,19 @@ def create_lineplot(data, subtitle=''):
     df_env = data.T
     df_env.index = df_env.index.astype(float)
     df_env.sort_index(inplace=True)
-
-    plt.figure(figsize=(14, 6))
+    marker_styles = ["o", "D", 's', '*']
+    marker_pool = itertools.cycle(marker_styles)
+    plt.figure(figsize=(12,6))
     for tech in df_env.columns:
         color = tech_colors.get(tech, '#333333')
         plt.plot(df_env.index, df_env[tech],
                 label=tech,
                 color=color,
-                linewidth=2,
-                marker='d',
+                linewidth=1,
+                marker=next(marker_pool),
                 markersize=4,  
                 linestyle='dotted',
-                alpha=0.5)
+                alpha=0.8)
     plt.xscale('log')
     plt.axhline(0, color='gray', linewidth=0.8, alpha=0.7)
     plt.grid(which='both', linestyle='--', alpha=0.35)
