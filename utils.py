@@ -7,19 +7,18 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import os
-
+import pypsa
 np.random.seed(42) # fix random seed for reproducibility
-
-
 
 ####################################
 ### Constants and Configurations ###
 ####################################
 
 data_path = 'data/' + 'Adatok_HU_2050.xlsx'
-cost_params = ['operation', 'environment', 'risk', 'reliability']
+cost_params = ['environment', 'operation', 'reliability', 'risk']
 week_numbers =  {'week_15':15, 'week_28':28, 'week_40':40, 'week_49':49}
 seasons = {'Spring': 1, 'Summer': 2, 'Autumn': 3, 'Winter': 4}
+technologies = ['Solar', 'Wind Offshore', 'Wind Onshore', 'Hydro Run-of-river', 'Hydro Water Reservoir', 'Geothermal', 'Biomass', 'Waste', 'Fossil Lignite', 'Fossil Hard coal', 'Fossil Gas', 'Nuclear','Fusion']
 tech_colors = {
     # Bright & Primary Tones
     'Solar': '#FFD700',            # Bright Gold/Yellow
@@ -43,7 +42,64 @@ tech_colors = {
     'Storage Actual':'#FF0000'
 }
 
+###################################
+### Data Manipulation Functions ###
+###################################
 
+def build_and_optimize_network(name, generator_costs, storage_costs, dates, demand, potentials_generator, potentials_storage, profile_PV, profile_wind, args, path):
+    network = pypsa.Network(name=name)
+    snapshots = np.array([item for sublist in dates for item in sublist])
+    network.set_snapshots(list(snapshots))
+    
+    network.add("Bus", "country_0", carrier='AC')
+    network.add('Carrier', 'AC')
+    network.add("Load", "Residential demand", bus="country_0", p_set=demand)  
+    
+    network.meta['costs_generator'] = generator_costs
+    network.meta['costs_storage'] = storage_costs 
+
+    # Add generators
+    for technology in potentials_generator.keys(): 
+        p_max_pu, p_min_pu = 1, 0
+        if technology == 'Solar':
+            p_max_pu = np.repeat(profile_PV.values, 7, axis=1).flatten('F')
+        elif technology == 'Wind Onshore':
+            p_max_pu = np.repeat(profile_wind.values, 7, axis=1).flatten('F')
+        elif technology == 'Nuclear':
+            p_min_pu = 0.8
+        
+        network.add(
+            "Generator", name=str(technology), bus="country_0",
+            p_nom=potentials_generator.loc['p_nom'][str(technology)],
+            p_nom_extendable=True,
+            p_nom_max=potentials_generator.loc['p_nom_max'][str(technology)],
+            p_nom_min=potentials_generator.loc['p_nom_min'][str(technology)],
+            capital_cost=generator_costs[str(technology)]['capital'],
+            marginal_cost=sum([generator_costs[str(technology)][key] for key in cost_params]),
+            p_max_pu=p_max_pu, p_min_pu=p_min_pu,
+            ramp_limit_up=potentials_generator.loc['ramp_up'][str(technology)],
+            ramp_limit_down=potentials_generator.loc['ramp_down'][str(technology)]
+        )
+
+    # Add storage
+    for technology in potentials_storage.keys():
+        network.add(
+            "StorageUnit", name=str(technology), bus="country_0",
+            p_nom_extendable=True,
+            p_nom_max=potentials_storage.loc['p_nom_max'][str(technology)],
+            capital_cost=storage_costs[str(technology)]['capital'],
+            marginal_cost=sum([storage_costs[str(technology)][key] for key in cost_params]),
+        )
+
+    network.sanitize()
+    network.optimize(
+        solver_name='highs', log_to_console=False,
+        solver_options={'presolve': 'on', 'threads': 'all', 'solver': 'simplex'}
+    )
+    
+    network.export_to_netcdf(f"{path}{network.name}.nc")
+        
+    return network
 
 ###################################
 ### Data Manipulation Functions ###

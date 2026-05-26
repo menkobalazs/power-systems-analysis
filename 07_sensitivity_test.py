@@ -1,34 +1,46 @@
 print('--- Start script. ---')
+
 ########################################################
 
-from utils import data_path, cost_params, week_numbers
-from utils import change_costs
+from utils import data_path, cost_params, week_numbers, technologies
+from utils import change_costs, build_and_optimize_network
 import numpy as np
 import pandas as pd
 import pypsa
-from tqdm import tqdm
-from datetime import datetime
 import argparse
 import os
 print('--- Packages imported. ---')
 
 ########################################################
 
-folder='data/sensitivity_test/'+datetime.now().strftime("%Y-%m-%d-%H-%M")
-os.makedirs(folder)
-print('--- Data folder created. ---')
+folder='data/sensitivity_test/'
+os.makedirs(folder, exist_ok=True)
+path = folder + 'networks/'
+os.makedirs(path, exist_ok=True)
+for cp in cost_params:
+    os.makedirs(path+cp, exist_ok=True)
+print('--- Data folders created. ---')
 
 ########################################################
 
 parser = argparse.ArgumentParser(description="Run PyPSA optimization in a loop.")
-parser.add_argument('-l', "--num_of_loop", type=int, default=100,
+parser.add_argument('-f', "--function", type=str, choices=['lin', 'log'],
                     help="*")
-parser.add_argument('-p', "--change_percentage", type=float, default=0.2,
+parser.add_argument('--log10-limits', type=bool, choices=[True, False], default=True,
                     help="*")
-parser.add_argument('-c', "--changed_cost_params", nargs="+", default=['operation'],
+parser.add_argument('-l', "--lower_limit", type=float, default=-3,
                     help="*")
-parser.add_argument('-t', "--changed_technologies", nargs="+", 
-                    default=['Solar', 'Wind Onshore', 'Fossil Lignite', 'Nuclear'],
+parser.add_argument('-u', "--upper_limit", type=float, default=3,
+                    help="*")
+parser.add_argument('-o', "--num_of_optimization", type=int, default=41,
+                    help="*")
+parser.add_argument('-c', "--changed_cost_params", nargs="+", default=cost_params,
+                    help="*")
+parser.add_argument('-t', "--changed_technologies", nargs="+", default=technologies,
+                    help="*")
+parser.add_argument('-s', "--save_networks", type=bool, default=True,
+                    help="*")
+parser.add_argument('-b', "--create_baseline", type=bool, default=False,
                     help="*")
 args = parser.parse_args()
 
@@ -46,6 +58,7 @@ for week in week_numbers.values():
 potentials_generator = pd.read_excel(data_path, sheet_name='potentials_generator', index_col=0, na_values='None')
 potentials_storage = pd.read_excel(data_path, sheet_name='potentials_storage', index_col=0, na_values='None')
 costs_storage = pd.read_excel(data_path, sheet_name='costs_storage', index_col=0, na_values='None').to_dict()
+costs_generator = pd.read_excel(data_path, sheet_name='costs_generator', index_col=0, na_values='None').to_dict()
 profile_wind = pd.read_excel(data_path, sheet_name='profile_wind', names=list(week_numbers.keys()), header=None, index_col=0)
 profile_PV = pd.read_excel(data_path, sheet_name='profile_PV', names=list(week_numbers.keys()), header=None, index_col=0)
 demand = pd.read_excel(data_path, sheet_name='demand').values.ravel()
@@ -53,96 +66,31 @@ print('--- Data loaded. ---')
 
 ########################################################
 
+if args.create_baseline:
+    print('--- Create baseline. ---')
+    network = build_and_optimize_network('baseline_1', costs_generator, costs_storage, dates, demand, 
+                                        potentials_generator, potentials_storage, profile_PV, profile_wind, args, path)
+
+########################################################
+
 print('--- Start optimizations. ---')
-for i in tqdm(range(args.num_of_loop)):
-    costs_generator = pd.read_excel(data_path, sheet_name='costs_generator', index_col=0, na_values='None').to_dict()
+f_space = np.linspace if args.function == 'lin' else np.logspace
+if args.log10_limits and args.function == 'log':
+    args.lower_limit, args.upper_limit = np.log10(args.lower_limit), np.log10(args.upper_limit)
+cost_multipliers = f_space(args.lower_limit, args.upper_limit, args.num_of_optimization)
+cost_multipliers = cost_multipliers[~np.isclose(cost_multipliers, 1.0)] # drop 1 to avoid similar runs
+for cp in args.changed_cost_params:
+    for x in cost_multipliers:
+        costs_generator = pd.read_excel(data_path, sheet_name='costs_generator', index_col=0, na_values='None').to_dict()
+        change_costs(costs_generator, technologies=args.changed_technologies, cost_params=[cp], allow_rand_seed=False, function='constant', x=x)
+        network = build_and_optimize_network(cp+'_'+str(np.round(x,5)), costs_generator, costs_storage, dates, demand, 
+                                             potentials_generator, potentials_storage, profile_PV, profile_wind, args, path+cp+'/')
 
-    if i!=0:
-        change_costs(costs_generator,
-                    technologies=args.changed_technologies,
-                    cost_params=args.changed_cost_params, 
-                    allow_rand_seed=False,
-                    function='constant', 
-                    x=np.random.uniform(1-args.change_percentage,1+args.change_percentage)
-                    )
 
-    # Building the network
-    network = pypsa.Network(name='Network')
+print(f'--- Optimizations are done. ---')
 
-    # Time stamps
-    snapshots = np.array([item for sublist in dates for item in sublist])
-    network.set_snapshots(list(snapshots))
+########################################################
 
-    # Base electrical network
-    network.add(class_name="Bus", name="country_0", carrier='AC')
+#print('--- Start data processing. ---')
 
-    # Set a carrier for the network
-    network.add(class_name='Carrier', name='AC')
 
-    # Add demand to the network
-    network.add(class_name="Load", name="Residential demand",  bus="country_0", p_set=demand)  
-
-    # Save cost parameters to the network
-    network.meta['costs_generator']=costs_generator
-    network.meta['costs_storage']=costs_storage 
-
-    # Add generators to the network
-    for technology in potentials_generator.keys(): 
-        p_max_pu=1
-        p_min_pu=0
-        #committable=False
-
-        # getting profiles 
-        if technology in ['Solar']:
-            p_max_pu=np.repeat(profile_PV.values, 7, axis=1).flatten('F') # column-major order
-        elif technology in ['Wind Onshore']:
-            p_max_pu=np.repeat(profile_wind.values, 7, axis=1).flatten('F')
-        elif technology in ['Nuclear']:
-            p_min_pu=0.8
-            #committable=True
-        
-        # adding generators
-        network.add(class_name="Generator", 
-                    name=str(technology),
-                    #nicename=str(technology),
-                    bus="country_0",
-                    
-                    p_nom=potentials_generator.loc['p_nom'][str(technology)],
-                    p_nom_extendable=True, # optimisable generator capacity
-                    p_nom_max=potentials_generator.loc['p_nom_max'][str(technology)], # maximum limit
-                    p_nom_min=potentials_generator.loc['p_nom_min'][str(technology)], # minimum limit
-                    capital_cost=costs_generator[str(technology)]['capital'], # generator installation cost
-                    marginal_cost=sum([costs_generator[str(technology)][key] for key in cost_params]), # operating cost
-                    p_max_pu=p_max_pu, # maximum power per-unit // production profiles
-                    p_min_pu=p_min_pu,
-                    ramp_limit_up=potentials_generator.loc['ramp_up'][str(technology)],   # maximum increase per hour
-                    ramp_limit_down=potentials_generator.loc['ramp_down'][str(technology)], # maximum decrease per hour
-
-                    #committable=committable,
-                    #ramp_limit_start_up=0.75,
-                    #ramp_limit_shut_down=0.75
-                )
-    
-    # Storage units creation
-    for technology in potentials_storage.keys():
-        network.add(class_name="StorageUnit", 
-                    name=str(technology),
-                    bus="country_0",
-                    
-                    p_nom_extendable=True, # optimisable storage capacity
-                    p_nom_max=potentials_storage.loc['p_nom_max'][str(technology)], # maximum limit
-                    capital_cost=costs_storage[str(technology)]['capital'], # installation cost
-                    marginal_cost=sum([costs_storage[str(technology)][key] for key in cost_params]), # operating cost
-                )
-        
-    # Optimization
-    network.sanitize()
-    result = network.optimize(solver_name='highs', 
-                    log_to_console=False,
-                    solver_options={'presolve': 'on', 
-                                    'threads': 'all',
-                                    'solver': 'simplex', # simplex/ipm/pdlp
-                                    }
-                    )
-
-    network.export_to_netcdf(folder+f"/run_{i}_{result[0]}_{result[1]}.nc")
