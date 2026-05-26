@@ -2,12 +2,16 @@
 ### Packages ###
 ################
 
-import numpy as np
-import seaborn as sns
-import matplotlib.pyplot as plt
-import plotly.graph_objects as go
+import re
 import os
 import pypsa
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib.colors as colors
+import plotly.graph_objects as go
+from glob import glob
 np.random.seed(42) # fix random seed for reproducibility
 
 ####################################
@@ -27,7 +31,7 @@ tech_colors = {
     'Hydro Run-of-river': '#2979FF', # Vivid Azure Blue
     # Deep & Rich Tones
     'Hydro Water Reservoir': '#311B92', # Deep Midnight Purple
-    'Geothermal': '#FF3D00',       # Bright Red-Orange
+    'Geothermal': "#FF8800",       # Bright Red-Orange
     'Biomass': '#795548',          # Earthy Walnut Brown
     # High-Visibility Accents
     'Waste': '#C6FF00',            # Acid Lime 
@@ -42,9 +46,9 @@ tech_colors = {
     'Storage Actual':'#FF0000'
 }
 
-###################################
-### Data Manipulation Functions ###
-###################################
+######################################
+### Network Optimizations Function ###
+######################################
 
 def build_and_optimize_network(name, generator_costs, storage_costs, dates, demand, potentials_generator, potentials_storage, profile_PV, profile_wind, args, path):
     network = pypsa.Network(name=name)
@@ -165,7 +169,19 @@ def change_storage_p_nom_max(seed, min=100, max=3000):
     np.random.seed(seed)
     return np.random.randint(min, max , 2)
 
+def float_sort_key(path):
+    match = re.search(r'(\d+\.\d+)', path)
+    return float(match.group(1)) if match else 0.0
 
+def read_nc_data(path, baseline):
+    nws = {}
+    nws_normed = {}
+    for file in sorted(glob(path), key=float_sort_key):
+        nw = pypsa.Network(file)
+        nw_name = nw.name.split('_')
+        nws[nw_name[1]] = np.round(nw.generators.p_nom_opt.abs(),5)
+        nws_normed[nw_name[1]] = np.round(nw.generators.p_nom_opt.abs() - baseline.generators.p_nom_opt.abs(), 5)
+    return pd.DataFrame(nws), pd.DataFrame(nws_normed)
 
 ###############################
 ### Visualization Functions ###
@@ -284,5 +300,49 @@ def plot_links(network, dates, season, day):
         country_id = str(title).split("_")
         clean_title = f"Link: {country_id[1]} → {country_id[2]}"
         ax.set_title(clean_title,  fontsize=10, pad=10)
+    plt.tight_layout()
+    plt.show()
+
+def create_heatmap(data, subtitle=''):
+    plt.figure(figsize=(12,8))
+    norm = colors.SymLogNorm(
+        linthresh=1.0, 
+        vmin=data.min().min(), 
+        vmax=data.max().max(),
+        base=10
+    )
+    sns.heatmap(data, 
+                cmap='magma', 
+                norm=norm,
+                cbar_kws={'label': r'$\Delta P$ [MWh]'} )
+    plt.title("Impact of Cost Multiplier on Optimal Generator Capacity" + (('\n'+subtitle) if subtitle else ''))
+    plt.xlabel("Cost Multiplier")
+    plt.ylabel("Power Plant Types")
+    plt.xticks(rotation=50)
+    plt.show()
+
+def create_lineplot(data, subtitle=''):
+    df_env = data.T
+    df_env.index = df_env.index.astype(float)
+    df_env.sort_index(inplace=True)
+
+    plt.figure(figsize=(14, 6))
+    for tech in df_env.columns:
+        color = tech_colors.get(tech, '#333333')
+        plt.plot(df_env.index, df_env[tech],
+                label=tech,
+                color=color,
+                linewidth=2,
+                marker='d',
+                markersize=4,  
+                linestyle='dotted',
+                alpha=0.5)
+    plt.xscale('log')
+    plt.axhline(0, color='gray', linewidth=0.8, alpha=0.7)
+    plt.grid(which='both', linestyle='--', alpha=0.35)
+    plt.legend(title='Technologies', bbox_to_anchor=(1.02, 1), loc='upper left')
+    plt.title("Impact of Cost Multiplier on Optimal Generator Capacity" + (('\n'+subtitle) if subtitle else ''))
+    plt.xlabel('Cost Multiplier')
+    plt.ylabel(r'$\Delta P$ [MWh]')
     plt.tight_layout()
     plt.show()
