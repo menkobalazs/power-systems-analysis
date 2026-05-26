@@ -6,7 +6,6 @@ from utils import data_path, cost_params, week_numbers, technologies
 from utils import change_costs, build_and_optimize_network
 import numpy as np
 import pandas as pd
-import pypsa
 import argparse
 import os
 print('--- Packages imported. ---')
