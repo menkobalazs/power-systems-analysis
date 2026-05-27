@@ -1,5 +1,4 @@
 __pycache__
 .powersys
 data/*
-figures/*
 pypsa-eur/*
