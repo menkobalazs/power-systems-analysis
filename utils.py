@@ -23,25 +23,21 @@ data_path = 'data/' + 'Adatok_HU_2050.xlsx'
 cost_params = ['capital', 'environment', 'operation', 'reliability', 'risk']
 week_numbers =  {'week_15':15, 'week_28':28, 'week_40':40, 'week_49':49}
 seasons = {'Spring': 1, 'Summer': 2, 'Autumn': 3, 'Winter': 4}
-technologies = ['Solar', 'Wind Offshore', 'Wind Onshore', 'Hydro Run-of-river', 'Hydro Water Reservoir', 'Geothermal', 'Biomass', 'Waste', 'Fossil Lignite', 'Fossil Hard coal', 'Fossil Gas', 'Nuclear','Fusion']
 tech_colors = {
-    # Bright & Primary Tones
+    # Generators
     'Solar': '#FFD700',            # Bright Gold/Yellow
-    'Wind Onshore': '#00C853',     # High-contrast Vivid Green
     'Wind Offshore': '#00E5FF',    # Electric Cyan
+    'Wind Onshore': '#00C853',     # High-contrast Vivid Green
     'Hydro Run-of-river': '#2979FF', # Vivid Azure Blue
-    # Deep & Rich Tones
     'Hydro Water Reservoir': '#311B92', # Deep Midnight Purple
     'Geothermal': "#FF8800",       # Bright Red-Orange
     'Biomass': '#795548',          # Earthy Walnut Brown
-    # High-Visibility Accents
     'Waste': '#C6FF00',            # Acid Lime 
-    'Nuclear': '#D500F9',          # Electric Magenta/Purple
-    'Fusion': '#F50057',           # Vivid Pink/Deep Rose
-    # Neutral/Fossil Tones 
     'Fossil Lignite': '#546E7A',   # Blue-Gray/Slate
     'Fossil Hard coal': '#212121', # Deep Charcoal/Black
     'Fossil Gas': '#B0BEC5',       # Pale Silver
+    'Nuclear': '#D500F9',          # Electric Magenta/Purple
+    'Fusion': '#F50057',           # Vivid Pink/Deep Rose
     # Storages:
     'Pumped Storage Actual':'#0000FF',
     'Storage Actual':'#FF0000'
@@ -178,15 +174,17 @@ def read_nc_data(path, baseline):
     for file in sorted(glob(path), key=float_sort_key):
         nw = pypsa.Network(file)
         nw_name = nw.name.split('_')
-        nws[nw_name[1]] = np.round(nw.generators.p_nom_opt.abs(),5)
-        nws_normed[nw_name[1]] = np.round(nw.generators.p_nom_opt.abs() - baseline.generators.p_nom_opt.abs(), 5)
+        max_capacities = pd.concat((nw.generators.p_nom_opt.abs(), nw.storage_units.p_nom_opt.abs()))
+        nws[nw_name[1]] = np.round(max_capacities, 3)
+        nws_normed[nw_name[1]] = max_capacities - pd.concat((baseline.generators.p_nom_opt.abs(), baseline.storage_units.p_nom_opt.abs()))
     return pd.DataFrame(nws), pd.DataFrame(nws_normed)
+
 
 ###############################
 ### Visualization Functions ###
 ###############################
 
-def plot_generator_t(network, dates, season, day, colors=tech_colors, country=None, demand=[]):
+def plot_generator_t(network, dates, season, day, colors=tech_colors, country=None, demand=[], savefig=''):
     """
     Plot the optimal energy generation dispatch for a specific season and day, including storage unit activity.
     """
@@ -241,10 +239,11 @@ def plot_generator_t(network, dates, season, day, colors=tech_colors, country=No
     ax.set_xticklabels(generators_t_p.index, rotation=0)
     plt.tight_layout()
     plt.grid(axis='y', linestyle='--', alpha=0.8)
+    if savefig: plt.savefig(savefig, bbox_inches='tight')
     plt.show()
     return None
 
-def plot_generator_t_plotly(network, dates, season, colors, save_path=None):
+def plot_generator_t_plotly(network, dates, season, colors, savefig=''):
     """
     Plot the optimal energy generation dispatch for a specific time range using Plotly, including storage unit activity.
     """
@@ -275,11 +274,10 @@ def plot_generator_t_plotly(network, dates, season, colors, save_path=None):
         legend=dict(font=dict(size=10), orientation="v", yanchor="top", y=1, xanchor="left", x=1.02),
         margin=dict(l=50, r=150, t=80, b=50)
     )
-    if not save_path: save_path = f"figures/{title.replace(' ', '_').lower()}.html"
-    fig.write_html(save_path, include_plotlyjs='cdn')
+    if savefig: fig.write_html(savefig, include_plotlyjs='cdn')
     return None
 
-def plot_links(network, dates, season, day):
+def plot_links(network, dates, season, day, savefig=''):
     if type(season) == str: 
         season = seasons[season]
     if season < 1 or season > 4:
@@ -300,49 +298,51 @@ def plot_links(network, dates, season, day):
         clean_title = f"Link: {country_id[1]} → {country_id[2]}"
         ax.set_title(clean_title,  fontsize=10, pad=10)
     plt.tight_layout()
+    if savefig: plt.savefig(savefig, bbox_inches='tight')
     plt.show()
+    return None
 
-def create_heatmap(data, subtitle=''):
-    plt.figure(figsize=(12,6))
-    norm = colors.SymLogNorm(
-        linthresh=1.0, 
-        vmin=data.min().min(), 
-        vmax=data.max().max(),
-        base=10
-    )
-    sns.heatmap(data, 
-                cmap='magma', 
-                norm=norm,
-                cbar_kws={'label': r'$\Delta P$ [MWh]'} )
-    plt.title("Impact of Cost Multiplier on Optimal Generator Capacity" + (('\n'+subtitle) if subtitle else ''))
-    plt.xlabel("Cost Multiplier")
-    plt.ylabel("Power Plant Types")
-    plt.xticks(rotation=50)
-    plt.show()
-
-def create_lineplot(data, subtitle=''):
+def create_lineplot(data, title, savefig=''):
     df_env = data.T
     df_env.index = df_env.index.astype(float)
     df_env.sort_index(inplace=True)
-    marker_styles = ["o", "D", 's', '*']
+    marker_styles = ["+", 'o', 'x']
     marker_pool = itertools.cycle(marker_styles)
     plt.figure(figsize=(12,6))
     for tech in df_env.columns:
-        color = tech_colors.get(tech, '#333333')
         plt.plot(df_env.index, df_env[tech],
-                label=tech,
-                color=color,
+                label= tech if max(df_env[tech]) else f"{tech} (always zero)",
+                color=tech_colors.get(tech, '#333333'),
                 linewidth=1,
                 marker=next(marker_pool),
                 markersize=4,  
                 linestyle='dotted',
-                alpha=0.8)
+                alpha= 0.9 if max(df_env[tech]) else 0.4)
     plt.xscale('log')
     plt.axhline(0, color='gray', linewidth=0.8, alpha=0.7)
-    plt.grid(which='both', linestyle='--', alpha=0.35)
-    plt.legend(title='Technologies', bbox_to_anchor=(1.02, 1), loc='upper left')
-    plt.title("Impact of Cost Multiplier on Optimal Generator Capacity" + (('\n'+subtitle) if subtitle else ''))
-    plt.xlabel('Cost Multiplier')
-    plt.ylabel(r'$\Delta P$ [MWh]')
+    plt.grid(which='both', linestyle='dotted', alpha=0.4)
+    plt.legend(title='Technologies', bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=10)
+    plt.title(f"Impact of {title} Cost", fontsize=16)
+    plt.xlabel('Cost Multiplier', fontsize=12)
+    plt.ylabel(r'Optimised capacity [MWh]', fontsize=12)
     plt.tight_layout()
+    if savefig: plt.savefig(savefig, bbox_inches='tight')
     plt.show()
+    return None
+    
+def create_heatmap(data, title='', savefig=''):
+    plt.figure(figsize=(12,6))
+    norm = colors.SymLogNorm(linthresh=1.0, vmin=data.min().min(), vmax=data.max().max(), base=10)
+    sns.heatmap(data, cmap='coolwarm', norm=norm, cbar_kws={'label': r'Normalized optimised capacity [MWh]'} )
+    plt.title(f"Impact of {title} Cost", fontsize=16)
+    plt.xlabel('Cost Multiplier', fontsize=12)
+    plt.ylabel("Power Plant Types", fontsize=12)
+    tick_step = max(1, len(data.columns) // 10)
+    ticks = list(range(0, len(data.columns), tick_step))
+    if ticks[-1] != len(data.columns) - 1:
+        ticks.append(len(data.columns) - 1)
+    tick_labels = [str(np.round(float(data.columns[i]),3)) for i in ticks]
+    plt.xticks(ticks, tick_labels, rotation=45, ha='center')
+    if savefig: plt.savefig(savefig, bbox_inches='tight')
+    plt.show()
+    return None

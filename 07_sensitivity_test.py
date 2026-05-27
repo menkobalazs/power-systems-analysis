@@ -2,7 +2,7 @@ print('--- Start script. ---')
 
 ###########################################################
 
-from utils import data_path, cost_params, week_numbers, technologies
+from utils import data_path, cost_params, week_numbers, tech_colors
 from utils import change_costs, build_and_optimize_network
 import numpy as np
 import pandas as pd
@@ -17,15 +17,15 @@ parser.add_argument('-f', "--function", type=str, choices=['lin', 'log'], defaul
                     help="*")
 parser.add_argument('--log10-limits', type=bool, choices=[True, False], default=True,
                     help="*")
-parser.add_argument('-l', "--lower_limit", type=float, default=-3,
+parser.add_argument('-l', "--lower_limit", type=float, default=0.001,
                     help="*")
-parser.add_argument('-u', "--upper_limit", type=float, default=3,
+parser.add_argument('-u', "--upper_limit", type=float, default=1000,
                     help="*")
-parser.add_argument('-o', "--num_of_optimization", type=int, default=41,
+parser.add_argument('-n', "--num_of_optimization", type=int, default=41,
                     help="*")
 parser.add_argument('-c', "--changed_cost_params", nargs="+", default=cost_params,
                     help="*")
-parser.add_argument('-t', "--changed_technologies", nargs="+", default=technologies,
+parser.add_argument('-t', "--changed_technologies", nargs="+", default=list(tech_colors.keys())[:-2],
                     help="*")
 parser.add_argument('-s', "--save_path", type=str, default='data/sensitivity_test/networks/',
                     help="*")
