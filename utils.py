@@ -165,8 +165,13 @@ def change_storage_p_nom_max(seed, min=100, max=3000):
     return np.random.randint(min, max , 2)
 
 def float_sort_key(path):
-    match = re.search(r'(\d+\.\d+)', path)
-    return float(match.group(1)) if match else 0.0
+    match_float = re.search(r'(\d+\.\d+)', path)
+    if match_float:
+        return float(match_float.group(1))
+    match_scientific = re.search(r'(\d+\.?\d*[eE][+-]?\d+)', path)
+    if match_scientific:
+        return float(match_scientific.group(1))
+    return 0.0
 
 def read_nc_data(path, baseline):
     nws = {}
@@ -302,7 +307,7 @@ def plot_links(network, dates, season, day, savefig=''):
     plt.show()
     return None
 
-def create_lineplot(data, title, savefig=''):
+def create_lineplot(data, title, xlim=(None, None), savefig=''):
     df_env = data.T
     df_env.index = df_env.index.astype(float)
     df_env.sort_index(inplace=True)
@@ -319,6 +324,7 @@ def create_lineplot(data, title, savefig=''):
                 linestyle='dotted',
                 alpha= 0.9 if max(df_env[tech]) else 0.4)
     plt.xscale('log')
+    plt.xlim(xlim)
     plt.axhline(0, color='gray', linewidth=0.8, alpha=0.7)
     plt.grid(which='both', linestyle='dotted', alpha=0.4)
     plt.legend(title='Technologies', bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=10)
