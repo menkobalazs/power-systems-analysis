@@ -21,11 +21,13 @@ parser.add_argument('-l', "--lower_limit", type=float, default=0.001,
 parser.add_argument('-u', "--upper_limit", type=float, default=1000,
                     help="Upper bound of the cost multiplier range.")
 parser.add_argument('-g', '--set_limit_log_scale', type=bool, default=False, action=argparse.BooleanOptionalAction,
-                    help="Interpret lower/upper limits as log10 values when using log spacing.")
+                    help="Interpret lower/upper limits as decimal values when using log spacing.")
 parser.add_argument('-e', '--set_limit_exp_scale', type=bool, default=False, action=argparse.BooleanOptionalAction,
                     help="Interpret lower/upper limits as exponents (10^x) when using linear spacing.")
 parser.add_argument('-n', "--num_of_optimization", type=int, default=41,
                     help="Number of optimization runs (points in the multiplier range).")
+parser.add_argument("--filtering_factor", type=float, default=0.1,
+                    help="Filtering factor for cost multipliers.")
 parser.add_argument('-c', "--changed_cost_params", nargs="+", default=cost_params,
                     help="Cost parameters to vary (e.g. investment, fixedom, fuel).")
 parser.add_argument('-t', "--changed_technologies", nargs="+", default=list(tech_colors.keys())[:-2],
@@ -70,7 +72,7 @@ print('--- Data loaded. ---')
 if args.create_baseline:
     print('--- Create baseline. ---')
     network = build_and_optimize_network(args.baseline_name, costs_generator, costs_storage, dates, demand, 
-                                        potentials_generator, potentials_storage, profile_PV, profile_wind, args, args.save_path)
+                                        potentials_generator, potentials_storage, profile_PV, profile_wind, args.save_path)
 
 ###########################################################
 
@@ -85,15 +87,15 @@ cost_multipliers = f_space(args.lower_limit, args.upper_limit, args.num_of_optim
 for cp in args.changed_cost_params:
     runned_simulations = glob(args.save_path+cp+'/*')
     existing_multipliers = [float(item.split('/')[-1].split('_')[-1].split('.nc')[0]) for item in runned_simulations]
-    # exclude multipliers that are within +/-10% of any existing multiplier
+    # exclude multipliers that are within +/-X% of any existing multiplier
     cost_multipliers_filtered = [x for x in cost_multipliers
-                                 if not any(abs(x - ex) / max(abs(ex), 1e-12) <= 0.1 for ex in existing_multipliers)]
+                                 if not any(abs(x - ex) / max(abs(ex), 1e-12) <= args.filtering_factor for ex in existing_multipliers)]
     print(f'--- {cp}: {len(cost_multipliers_filtered)} out of {len(cost_multipliers)} multipliers will be simulated. ---')
     for x in cost_multipliers_filtered:
         costs_generator = pd.read_excel(data_path, sheet_name='costs_generator', index_col=0, na_values='None').to_dict()
         change_costs(costs_generator, technologies=args.changed_technologies, cost_params=[cp], allow_rand_seed=False, function='constant', x=x)
-        network = build_and_optimize_network(cp+'_'+str(np.round(x,5)), costs_generator, costs_storage, dates, demand, 
-                                             potentials_generator, potentials_storage, profile_PV, profile_wind, args, args.save_path+cp+'/')
+        build_and_optimize_network(cp+'_'+str(np.round(x,7)), costs_generator, costs_storage, dates, demand, 
+                                             potentials_generator, potentials_storage, profile_PV, profile_wind, args.save_path+cp+'/')
 
 
 print(f'--- Optimizations are done. ---')
