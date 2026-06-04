@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import plotly.graph_objects as go
 from glob import glob
+from pathlib import Path
 np.random.seed(42) # fix random seed for reproducibility
 
 ####################################
@@ -47,7 +48,7 @@ tech_colors = {
 ### Network Optimizations Function ###
 ######################################
 
-def build_and_optimize_network(name, generator_costs, storage_costs, dates, demand, potentials_generator, potentials_storage, profile_PV, profile_wind, args, path):
+def build_and_optimize_network(name, generator_costs, storage_costs, dates, demand, potentials_generator, potentials_storage, profile_PV, profile_wind, save_path):
     network = pypsa.Network(name=name)
     snapshots = np.array([item for sublist in dates for item in sublist])
     network.set_snapshots(list(snapshots))
@@ -96,7 +97,7 @@ def build_and_optimize_network(name, generator_costs, storage_costs, dates, dema
         solver_options={'presolve': 'on', 'threads': 'all', 'solver': 'simplex'}
     )
     
-    network.export_to_netcdf(f"{path}{network.name}.nc")
+    network.export_to_netcdf(f"{save_path}{network.name}.nc")
         
     return network
 
@@ -165,13 +166,11 @@ def change_storage_p_nom_max(seed, min=100, max=3000):
     return np.random.randint(min, max , 2)
 
 def float_sort_key(path):
-    match_float = re.search(r'(\d+\.\d+)', path)
-    if match_float:
-        return float(match_float.group(1))
-    match_scientific = re.search(r'(\d+\.?\d*[eE][+-]?\d+)', path)
-    if match_scientific:
-        return float(match_scientific.group(1))
-    return 0.0
+    stem = Path(path).stem
+    match = re.search(r'[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?', stem)
+    if match:
+        return float(match.group(0))
+    raise ValueError(f"No numeric parameter found in filename: {path}")
 
 def read_nc_data(path, baseline):
     nws = {}
@@ -325,8 +324,14 @@ def create_lineplot(data, title, xlim=(None, None), savefig=''):
                 alpha= 0.9 if max(df_env[tech]) else 0.4)
     plt.xscale('log')
     plt.xlim(xlim)
+    idx = df_env.index.astype(float)
+    idx_pos = idx[idx > 0]
+    if not idx_pos.empty:
+        xticks = np.logspace(np.log10(idx_pos.min()), np.log10(idx_pos.max()), num=20)
+        xtick_labels = [f"{x:.2e}" for x in xticks]
+        plt.xticks(xticks, xtick_labels, rotation=45, ha='center')
     plt.axhline(0, color='gray', linewidth=0.8, alpha=0.7)
-    plt.grid(which='both', linestyle='dotted', alpha=0.4)
+    plt.grid(which='both', linestyle='dotted')
     plt.legend(title='Technologies', bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=10)
     plt.title(f"Impact of {title} Cost", fontsize=16)
     plt.xlabel('Cost Multiplier', fontsize=12)
@@ -339,16 +344,14 @@ def create_lineplot(data, title, xlim=(None, None), savefig=''):
 def create_heatmap(data, title='', savefig=''):
     plt.figure(figsize=(12,6))
     norm = colors.SymLogNorm(linthresh=1.0, vmin=data.min().min(), vmax=data.max().max(), base=10)
-    sns.heatmap(data, cmap='coolwarm', norm=norm, cbar_kws={'label': r'Normalized optimised capacity [MWh]'} )
+    ax = sns.heatmap(data, cmap='coolwarm', norm=norm, cbar_kws={'label': r'Normalized optimised capacity [MWh]'} )
     plt.title(f"Impact of {title} Cost", fontsize=16)
     plt.xlabel('Cost Multiplier', fontsize=12)
     plt.ylabel("Power Plant Types", fontsize=12)
-    tick_step = max(1, len(data.columns) // 10)
-    ticks = list(range(0, len(data.columns), tick_step))
-    if ticks[-1] != len(data.columns) - 1:
-        ticks.append(len(data.columns) - 1)
-    tick_labels = [str(np.round(float(data.columns[i]),3)) for i in ticks]
-    plt.xticks(ticks, tick_labels, rotation=45, ha='center')
+    tick_positions = np.linspace(0, data.shape[1]-1, 20, dtype=int)
+    ax.set_xticks(tick_positions + 0.5)
+    ax.set_xticklabels([f"{float(data.columns[i]):.2e}" for i in tick_positions], rotation=45, ha='center')
+    plt.tight_layout()
     if savefig: plt.savefig(savefig, bbox_inches='tight')
     plt.show()
     return None
