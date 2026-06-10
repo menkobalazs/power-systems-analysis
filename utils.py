@@ -41,6 +41,7 @@ tech_colors = {
     'Fusion': '#F50057',           # Vivid Pink/Deep Rose
     # Storages:
     'Pumped Storage Actual':'#0000FF',
+    'Storage Actual ':'#FF0000', # Due to a typo a version exists with a scape at the end
     'Storage Actual':'#FF0000'
 }
 
@@ -49,6 +50,23 @@ tech_colors = {
 ######################################
 
 def build_and_optimize_network(name, generator_costs, storage_costs, dates, demand, potentials_generator, potentials_storage, profile_PV, profile_wind, save_path):
+    """
+    Build and optimize a PyPSA network with given generators, storage units, and demand profile.
+
+    Parameters:
+    - name: str, name for the network.
+    - generator_costs: dict, cost parameters for each generator technology.
+    - storage_costs: dict, cost parameters for each storage technology.
+    - dates: list of lists, snapshot timestamps for each season.
+    - demand: array-like, residential demand time series.
+    - potentials_generator: DataFrame, generator potential constraints (p_nom, p_nom_max, p_nom_min, ramp_up, ramp_down).
+    - potentials_storage: DataFrame, storage potential constraints (p_nom_max).
+    - profile_PV: DataFrame, solar generation profile.
+    - profile_wind: DataFrame, wind generation profile.
+    - save_path: str, directory path to save the optimized network as NetCDF.
+    Returns:
+    - network: pypsa.Network, the optimized network object.
+    """
     network = pypsa.Network(name=name)
     snapshots = np.array([item for sublist in dates for item in sublist])
     network.set_snapshots(list(snapshots))
@@ -166,6 +184,15 @@ def change_storage_p_nom_max(seed, min=100, max=3000):
     return np.random.randint(min, max , 2)
 
 def float_sort_key(path):
+    """
+    Extract a float value from a filename's stem for sorting purposes.
+
+    Parameters:
+    - path: str or Path, file path whose stem contains a numeric value.
+
+    Returns:
+    - float, the first numeric value found in the stem.
+    """
     stem = Path(path).stem
     match = re.search(r'[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?', stem)
     if match:
@@ -173,6 +200,16 @@ def float_sort_key(path):
     raise ValueError(f"No numeric parameter found in filename: {path}")
 
 def read_nc_data(path, baseline):
+    """
+    Read optimized network results from NetCDF files and compute absolute and normalized capacities.
+
+    Parameters:
+    - path: str, glob pattern matching the NetCDF files to read.
+    - baseline: pypsa.Network, baseline network whose capacities are subtracted for normalization.
+
+    Returns:
+    - tuple of pd.DataFrame: (absolute_capacities, normalized_capacities) where normalized = absolute - baseline.
+    """
     nws = {}
     nws_normed = {}
     for file in sorted(glob(path), key=float_sort_key):
@@ -183,6 +220,20 @@ def read_nc_data(path, baseline):
         nws_normed[nw_name[1]] = max_capacities - pd.concat((baseline.generators.p_nom_opt.abs(), baseline.storage_units.p_nom_opt.abs()))
     return pd.DataFrame(nws), pd.DataFrame(nws_normed)
 
+def calc_diff(data):
+    """
+    Compute differences between consecutive columns and identify the range where changes occur.
+
+    Parameters:
+    - data: pd.DataFrame, data with numeric columns to differentiate.
+
+    Returns:
+    - tuple: (differences DataFrame, boundary column indices as float32).
+    """
+    diffs = data.diff(axis=1).drop(columns=data.columns[0])
+    diffs.loc['changes'] = np.sum(diffs.abs(), axis=0)
+    boundaries = np.where(diffs.loc['changes']>0)[0][[0,-1]]
+    return diffs, np.float32(diffs.columns[boundaries])
 
 ###############################
 ### Visualization Functions ###
@@ -191,6 +242,19 @@ def read_nc_data(path, baseline):
 def plot_generator_t(network, dates, season, day, colors=tech_colors, country=None, demand=[], savefig=''):
     """
     Plot the optimal energy generation dispatch for a specific season and day, including storage unit activity.
+
+    Parameters:
+    - network: pypsa.Network, optimized network containing generators and storage units.
+    - dates: list of lists, snapshot timestamps for each season.
+    - season: str or int, season name (e.g. 'Spring') or index (1-4).
+    - day: int, day number within the season (1-7).
+    - colors: dict, mapping technology names to matplotlib colors. Defaults to tech_colors.
+    - country: str, int, or None. If provided, filters to a specific country (e.g. 'country_1' or 1).
+    - demand: list, optional demand time series to overlay on the plot.
+    - savefig: str, optional file path to save the figure.
+
+    Returns:
+    - None
     """
     if type(season) == str: 
         season = seasons[season]
@@ -249,7 +313,17 @@ def plot_generator_t(network, dates, season, day, colors=tech_colors, country=No
 
 def plot_generator_t_plotly(network, dates, season, colors, savefig=''):
     """
-    Plot the optimal energy generation dispatch for a specific time range using Plotly, including storage unit activity.
+    Plot the optimal energy generation dispatch for a specific season using Plotly, including storage unit activity.
+
+    Parameters:
+    - network: pypsa.Network, optimized network containing generators and storage units.
+    - dates: list of lists, snapshot timestamps for each season.
+    - season: str or int, season name (e.g. 'Spring') or index (1-4).
+    - colors: dict, mapping technology names to plotly color strings.
+    - savefig: str, optional file path to save the figure as HTML.
+
+    Returns:
+    - None
     """
     os.makedirs("figures", exist_ok=True)
     title = f'Optimal Energy Generation - {season}'
@@ -282,6 +356,16 @@ def plot_generator_t_plotly(network, dates, season, colors, savefig=''):
     return None
 
 def plot_links(network, dates, season, day, savefig=''):
+    """
+    Plot power flow on inter-country links for a given season and day using seaborn FacetGrid.
+
+    Parameters:
+    - network: pypsa.Network, optimized network containing links.
+    - dates: list of lists, snapshot timestamps for each season.
+    - season: str or int, season name (e.g. 'Spring') or index (1-4).
+    - day: int, day number within the season (1-7).
+    - savefig: str, optional file path to save the figure.
+    """
     if type(season) == str: 
         season = seasons[season]
     if season < 1 or season > 4:
@@ -306,7 +390,16 @@ def plot_links(network, dates, season, day, savefig=''):
     plt.show()
     return None
 
-def create_lineplot(data, title, xlim=(None, None), savefig=''):
+def create_lineplot(data, title, xlim=None, savefig=''):
+    """
+    Plot optimized capacity as a function of a cost multiplier across technologies.
+
+    Parameters:
+    - data: pd.DataFrame, capacity values indexed by cost multiplier with technologies as columns.
+    - title: str, base title describing the cost parameter being varied.
+    - xlim: tuple of float, optional x-axis limits for zooming.
+    - savefig: str, optional file path to save the figure.
+    """
     df_env = data.T
     df_env.index = df_env.index.astype(float)
     df_env.sort_index(inplace=True)
@@ -316,18 +409,22 @@ def create_lineplot(data, title, xlim=(None, None), savefig=''):
     for tech in df_env.columns:
         plt.plot(df_env.index, df_env[tech],
                 label= tech if max(df_env[tech]) else f"{tech} (always zero)",
-                color=tech_colors.get(tech, '#333333'),
+                color=tech_colors.get(tech, '#00FF00'),
                 linewidth=1,
                 marker=next(marker_pool),
                 markersize=4,  
                 linestyle='dotted',
                 alpha= 0.9 if max(df_env[tech]) else 0.4)
     plt.xscale('log')
-    plt.xlim(xlim)
     idx = df_env.index.astype(float)
     idx_pos = idx[idx > 0]
     if not idx_pos.empty:
-        xticks = np.logspace(np.log10(idx_pos.min()), np.log10(idx_pos.max()), num=20)
+        if xlim is not None: 
+            plt.xlim(xlim)
+            xticks = np.logspace(np.log10(xlim[0]), np.log10(xlim[1]), num=20)
+            print(f'Boundaries: [{round(xlim[0],6)};{float(xlim[1])}]')
+        else:
+            xticks = np.logspace(np.log10(idx_pos.min()), np.log10(idx_pos.max()), num=20)
         xtick_labels = [f"{x:.2e}" for x in xticks]
         plt.xticks(xticks, xtick_labels, rotation=45, ha='center')
     plt.axhline(0, color='gray', linewidth=0.8, alpha=0.7)
@@ -342,6 +439,14 @@ def create_lineplot(data, title, xlim=(None, None), savefig=''):
     return None
     
 def create_heatmap(data, title='', savefig=''):
+    """
+    Plot a heatmap of optimized capacity changes across cost multipliers and technologies.
+
+    Parameters:
+    - data: pd.DataFrame, capacity values indexed by cost multiplier with technologies as columns.
+    - title: str, base title describing the cost parameter being varied.
+    - savefig: str, optional file path to save the figure.
+    """
     plt.figure(figsize=(12,6))
     norm = colors.SymLogNorm(linthresh=1.0, vmin=data.min().min(), vmax=data.max().max(), base=10)
     ax = sns.heatmap(data, cmap='coolwarm', norm=norm, cbar_kws={'label': r'Normalized optimised capacity [MWh]'} )
