@@ -27,16 +27,18 @@ This repository contains power system modelling work using [PyPSA](https://docs.
 
 | Function | Purpose |
 |----------|---------|
-| `build_and_optimize_network()` | Create a PyPSA network with generators + storage units and run optimization |
-| `change_costs()` | Apply arbitrary cost multipliers to generator/storage cost parameters |
-| `change_generator_p_nom_max()` | Generate randomized maximum potential capacities |
+| `build_and_optimize_network()` | Build and optimize a PyPSA network with generators, storage units, and demand profile |
+| `change_costs()` | Apply a function to modify cost parameters for specified technologies |
+| `change_generator_p_nom_max()` | Generate randomized maximum generator potentials |
 | `change_storage_p_nom_max()` | Generate randomized maximum storage potentials |
-| `read_nc_data()` | Load and compare optimized `.nc` results against a baseline |
-| `plot_generator_t()` | Matplotlib stacked bar + storage line plot for dispatch |
+| `float_sort_key()` | Extract a float from a filename stem for numeric sorting |
+| `read_nc_data()` | Load optimized `.nc` files and compute absolute and normalized capacities |
+| `calc_diff()` | Compute differences between consecutive columns and detect change boundaries |
+| `plot_generator_t()` | Matplotlib stacked bar chart of dispatch with storage overlay |
 | `plot_generator_t_plotly()` | Interactive Plotly version of the dispatch chart |
-| `plot_links()` | Faceted line plots of inter-country link flows |
-| `create_lineplot()` | Sensitivity analysis line plot (capacity vs cost multiplier) |
-| `create_heatmap()` | Sensitivity analysis heatmap (normalized capacity change) |
+| `plot_links()` | Faceted seaborn line plots of inter-country link flows |
+| `create_lineplot()` | Sensitivity line plot of optimized capacity vs cost multiplier |
+| `create_heatmap()` | Sensitivity heatmap of normalized capacity changes |
 
 ## Setup
 
