@@ -234,7 +234,7 @@ def calc_diff(data, min_diff=0):
     diffs = data.diff(axis=1).drop(columns=data.columns[0])
     diffs.loc['changes'] = np.sum(diffs.abs(), axis=0)
     boundaries = np.where(diffs.loc['changes']>min_diff)[0][[0,-1]]
-    return diffs, np.float32(diffs.columns[boundaries])
+    return diffs, diffs.columns[boundaries].astype(float)
 
 ###############################
 ### Visualization Functions ###
