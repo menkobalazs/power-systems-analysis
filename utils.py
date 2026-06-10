@@ -220,19 +220,20 @@ def read_nc_data(path, baseline):
         nws_normed[nw_name[1]] = max_capacities - pd.concat((baseline.generators.p_nom_opt.abs(), baseline.storage_units.p_nom_opt.abs()))
     return pd.DataFrame(nws), pd.DataFrame(nws_normed)
 
-def calc_diff(data):
+def calc_diff(data, min_diff=0):
     """
     Compute differences between consecutive columns and identify the range where changes occur.
 
     Parameters:
     - data: pd.DataFrame, data with numeric columns to differentiate.
+    - min_diff: float, minimum difference between numeric columns
 
     Returns:
     - tuple: (differences DataFrame, boundary column indices as float32).
     """
     diffs = data.diff(axis=1).drop(columns=data.columns[0])
     diffs.loc['changes'] = np.sum(diffs.abs(), axis=0)
-    boundaries = np.where(diffs.loc['changes']>0)[0][[0,-1]]
+    boundaries = np.where(diffs.loc['changes']>min_diff)[0][[0,-1]]
     return diffs, np.float32(diffs.columns[boundaries])
 
 ###############################
@@ -413,8 +414,8 @@ def create_lineplot(data, title, xlim=None, savefig=''):
                 linewidth=1,
                 marker=next(marker_pool),
                 markersize=4,  
-                linestyle='dotted',
-                alpha= 0.9 if max(df_env[tech]) else 0.4)
+                linestyle='-.',
+                alpha= 1 if max(df_env[tech]) else 0.4)
     plt.xscale('log')
     idx = df_env.index.astype(float)
     idx_pos = idx[idx > 0]
@@ -422,7 +423,7 @@ def create_lineplot(data, title, xlim=None, savefig=''):
         if xlim is not None: 
             plt.xlim(xlim)
             xticks = np.logspace(np.log10(xlim[0]), np.log10(xlim[1]), num=20)
-            print(f'Boundaries: [{round(xlim[0],6)};{float(xlim[1])}]')
+            print(f'Boundaries: [{xlim[0]:.6f};{xlim[1]:.6f}]')
         else:
             xticks = np.logspace(np.log10(idx_pos.min()), np.log10(idx_pos.max()), num=20)
         xtick_labels = [f"{x:.2e}" for x in xticks]
