@@ -1,6 +1,6 @@
 # Power Systems Modelling with PyPSA
 
-This repository contains power system modelling work using [PyPSA](https://docs.pypsa.org/), focusing on a dataset based on a future Hungarian electricity system. It includes network optimization, sensitivity analysis, multi-country simulations, and integration with [PyPSA-Eur](https://pypsa-eur.readthedocs.io/).
+This repository contains power system modelling work using [PyPSA](https://docs.pypsa.org/), focusing on a dataset based on a future Hungarian electricity system. It includes network optimization, sensitivity analysis and multi-country simulations.
 
 ## Data
 
@@ -19,7 +19,7 @@ This repository contains power system modelling work using [PyPSA](https://docs.
 | `03_random_countries.ipynb` | Multi-country simulation with interconnected buses |
 | `04_visualization.ipynb` | Visualization of multi-country optimization results |
 | `05_pypsa_params.ipynb` | PyPSA generator & storage unit parameter reference |
-| `06_pypsa_eur.ipynb` | PyPSA-Eur integration: cluster extraction, data comparison |
+| `06_pypsa_eur.ipynb` | PyPSA-Eur integration: short study of PyPSA-Eur and its possibilities |
 | `07_sensitivity_test.py` | Script running sensitivity analysis over capital/operational cost multipliers |
 | `08_sensitivity_test_result.ipynb` | Visualization of sensitivity test results (line plots, heatmaps) |
 
