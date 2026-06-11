@@ -17,27 +17,27 @@ parser = argparse.ArgumentParser(description="Run sensitivity analysis by scalin
 parser.add_argument('-f', "--function", type=str, choices=['lin', 'log'], required=True,
                     help="Spacing function for cost multipliers: 'lin' for linear, 'log' for logarithmic.")
 parser.add_argument('-l', "--lower_limit", type=float, default=0.001,
-                    help="Lower bound of the cost multiplier range.")
+                    help="Lower bound of the cost multiplier range. \nDefault: 0.001")
 parser.add_argument('-u', "--upper_limit", type=float, default=1000,
-                    help="Upper bound of the cost multiplier range.")
+                    help="Upper bound of the cost multiplier range. \nDefault: 1000")
 parser.add_argument('-g', '--set_limit_log_scale', type=bool, default=False, action=argparse.BooleanOptionalAction,
-                    help="Interpret lower/upper limits as decimal values when using log spacing.")
+                    help="Interpret lower/upper limits as decimal values when using log spacing. \nDefault: False")
 parser.add_argument('-e', '--set_limit_exp_scale', type=bool, default=False, action=argparse.BooleanOptionalAction,
-                    help="Interpret lower/upper limits as exponents (10^x) when using linear spacing.")
+                    help="Interpret lower/upper limits as exponents (10^x) when using linear spacing. \nDefault: False")
 parser.add_argument('-n', "--num_of_optimization", type=int, default=41,
-                    help="Number of optimization runs (points in the multiplier range).")
+                    help="Number of optimization runs (points in the multiplier range). \nDefault: 41")
 parser.add_argument("--filtering_factor", type=float, default=0.1,
-                    help="Filtering factor for cost multipliers.")
+                    help="Filtering factor for cost multipliers. \nDefault: 0.1")
 parser.add_argument('-c', "--changed_cost_params", nargs="+", default=cost_params,
-                    help="Cost parameters to vary (e.g. investment, fixedom, fuel).")
+                    help="Cost parameters to vary (capital, environment, operation, reliabiliy and risk). \nDefault: all cost types.")
 parser.add_argument('-t', "--changed_technologies", nargs="+", default=list(tech_colors.keys())[:-2],
-                    help="Technologies whose costs are modified.")
+                    help="Technologies whose costs are modified. \nDefault: all technolies.")
 parser.add_argument('-s', "--save_path", type=str, default='data/sensitivity_test/networks/',
-                    help="Directory to save resulting network files.")
+                    help="Directory to save resulting network files. \nDefault: 'data/sensitivity_test/networks/'")
 parser.add_argument('-b', "--create_baseline", type=bool, default=False, action=argparse.BooleanOptionalAction,
-                    help="Create a baseline optimization run before the sensitivity scans.")
+                    help="Create a baseline optimization run before the sensitivity scans. \nDefault: False")
 parser.add_argument("--baseline_name", type=str, default='baseline_1',
-                    help="Name for the baseline network file.")
+                    help="Name for the baseline network file. \nDefault: 'baseline_1'")
 args = parser.parse_args()
 
 ###########################################################
