@@ -49,7 +49,7 @@ tech_colors = {
 ### Network Optimizations Function ###
 ######################################
 
-def build_and_optimize_network(name, generator_costs, storage_costs, dates, demand, potentials_generator, potentials_storage, profile_PV, profile_wind, save_path):
+def build_and_optimize_network(name, generator_costs, storage_costs, dates, demand, potentials_generator, potentials_storage, profile_PV, profile_wind, save_path, save_meta_data={}):
     """
     Build and optimize a PyPSA network with given generators, storage units, and demand profile.
 
@@ -77,6 +77,8 @@ def build_and_optimize_network(name, generator_costs, storage_costs, dates, dema
     
     network.meta['costs_generator'] = generator_costs
     network.meta['costs_storage'] = storage_costs 
+    for key, val in save_meta_data:
+        network.meta[key] = val
 
     # Add generators
     for technology in potentials_generator.keys(): 
