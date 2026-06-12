@@ -222,7 +222,7 @@ def read_nc_data(path, baseline):
         nws_normed[nw_name[1]] = max_capacities - pd.concat((baseline.generators.p_nom_opt.abs(), baseline.storage_units.p_nom_opt.abs()))
     return pd.DataFrame(nws), pd.DataFrame(nws_normed)
 
-def calc_diff(data, min_diff=0):
+def calc_diff(data, min_diff=10):
     """
     Compute differences between consecutive columns and identify the range where changes occur.
 
