@@ -3,11 +3,14 @@
 ################
 
 import re
+import json
+import hashlib
 import pypsa
 import numpy as np
 import pandas as pd
 from glob import glob
 from pathlib import Path
+from scipy.stats import qmc
 np.random.seed(42) # fix random seed for reproducibility
 
 ####################################
@@ -72,7 +75,7 @@ def build_and_optimize_network(name, generator_costs, storage_costs, dates, dema
     
     network.meta['costs_generator'] = generator_costs
     network.meta['costs_storage'] = storage_costs 
-    for key, val in save_meta_data:
+    for key, val in save_meta_data.items():
         network.meta[key] = val
 
     # Add generators
@@ -180,6 +183,10 @@ def change_storage_p_nom_max(seed, min=100, max=3000):
     np.random.seed(seed)
     return np.random.randint(min, max , 2)
 
+######################################
+### Functions for Sensitivity Test ###
+######################################
+
 def float_sort_key(path):
     """
     Extract a float value from a filename's stem for sorting purposes.
@@ -233,3 +240,249 @@ def calc_diff(data, min_diff=10):
     boundaries = np.where(diffs.loc['changes']>min_diff)[0][[0,-1]]
     return diffs, diffs.columns[boundaries].astype(float)
 
+# ---------------
+
+def load_cost_boundaries(args):
+    """Load cost boundaries only once, if requested."""
+    if not args.use_cost_boundaries:
+        return None
+
+    with open(args.cost_boundaries_dict, "r", encoding="utf-8") as file:
+        return json.load(file)
+
+
+def get_sampling_bounds_for_cost_param(args, cp, cost_boundaries_dict):
+    """
+    Return lower and upper sampling bounds for one cost parameter.
+
+    For log sampling, bounds are returned in log10-space.
+    For linear sampling, bounds are returned in the original multiplier space.
+    """
+    if args.use_cost_boundaries:
+        lower_limit, upper_limit = cost_boundaries_dict[cp]
+    else:
+        lower_limit, upper_limit = args.lower_limit, args.upper_limit
+
+    lower_limit = float(lower_limit)
+    upper_limit = float(upper_limit)
+
+    if args.function == "log":
+        if lower_limit <= 0 or upper_limit <= 0:
+            raise ValueError(
+                f"Logarithmic sampling requires positive bounds for {cp}. "
+                f"Got lower={lower_limit}, upper={upper_limit}."
+            )
+
+        if args.set_limit_log_scale:
+            lower_limit = np.log10(lower_limit)
+            upper_limit = np.log10(upper_limit)
+
+        scale = "log10"
+
+    elif args.function == "lin":
+        if args.set_limit_exp_scale:
+            lower_limit = 10 ** lower_limit
+            upper_limit = 10 ** upper_limit
+        scale = "linear"
+
+    else:
+        raise ValueError(f"Unknown sampling function: {args.function}")
+
+    if lower_limit > upper_limit:
+        lower_limit, upper_limit = upper_limit, lower_limit
+
+    return lower_limit, upper_limit, scale
+
+
+def create_cost_multiplier_design(args, changed_cost_params):
+    """
+    Create a multi-dimensional Sobol or Latin Hypercube design.
+
+    args.num_of_optimization is interpreted as the total number of sampled
+    configurations, not as the number of points per cost parameter.
+    """
+    changed_cost_params = list(dict.fromkeys(changed_cost_params))
+    n_samples = int(args.num_of_optimization)
+    n_dimensions = len(changed_cost_params)
+
+    if n_samples <= 0:
+        raise ValueError("args.num_of_optimization must be positive.")
+
+    if n_dimensions == 0:
+        raise ValueError("args.changed_cost_params must contain at least one item.")
+
+    cost_boundaries_dict = load_cost_boundaries(args)
+
+    bounds = {}
+    scales = {}
+
+    for cp in changed_cost_params:
+        lower, upper, scale = get_sampling_bounds_for_cost_param(
+            args=args,
+            cp=cp,
+            cost_boundaries_dict=cost_boundaries_dict,
+        )
+        bounds[cp] = (lower, upper)
+        scales[cp] = scale
+
+    sampling_method = getattr(args, "sampling_method", "sobol").lower()
+    sampling_seed = getattr(args, "sampling_seed", 42)
+
+    if sampling_method == "sobol":
+        sampler = qmc.Sobol(
+            d=n_dimensions,
+            scramble=True,
+            rng=sampling_seed,
+        )
+
+        # Sobol balance is best for powers of two.
+        # We generate the next power of two and then keep the requested number.
+        m = int(np.ceil(np.log2(n_samples)))
+        unit_samples = sampler.random_base2(m=m)[:n_samples]
+
+    elif sampling_method in {"lhs", "latin_hypercube", "latin-hypercube"}:
+        sampler = qmc.LatinHypercube(
+            d=n_dimensions,
+            rng=sampling_seed,
+        )
+        unit_samples = sampler.random(n=n_samples)
+
+    else:
+        raise ValueError(
+            "Unknown sampling method. Use 'sobol' or 'lhs'. "
+            f"Got: {sampling_method}"
+        )
+
+    designs = []
+
+    for row in unit_samples:
+        cost_multipliers = {}
+
+        for j, cp in enumerate(changed_cost_params):
+            lower, upper = bounds[cp]
+            sampled_value = lower + row[j] * (upper - lower)
+
+            if scales[cp] == "log10":
+                multiplier = 10 ** sampled_value
+            else:
+                multiplier = sampled_value
+
+            cost_multipliers[cp] = float(multiplier)
+
+        designs.append(cost_multipliers)
+
+    return designs
+
+
+def canonicalize_cost_multipliers(
+    cost_multipliers,
+    log10_decimals=8,
+    relative_tolerance=None,
+):
+    """
+    Convert raw float multipliers to a canonical representation.
+
+    The hash is computed from rounded log10 multipliers, so tiny floating point
+    differences do not create different run IDs.
+    """
+    canonical_log10 = {}
+    canonical_multipliers = {}
+
+    for cp, value in cost_multipliers.items():
+        value = float(value)
+
+        if value <= 0:
+            raise ValueError(
+                f"Cost multipliers must be positive. Got {cp}={value}."
+            )
+
+        log_value = np.log10(value)
+
+        if relative_tolerance is not None and relative_tolerance > 0:
+            # A relative tolerance in multiplier space corresponds roughly to
+            # a fixed step in log10-space.
+            log_step = np.log10(1.0 + float(relative_tolerance))
+            log_value = round(log_value / log_step) * log_step
+        else:
+            log_value = round(log_value, int(log10_decimals))
+
+        canonical_log10[cp] = float(log_value)
+        canonical_multipliers[cp] = float(10 ** log_value)
+
+    return canonical_multipliers, canonical_log10
+
+
+def make_run_id(hash_payload):
+    """Create a stable hash from a canonical JSON payload."""
+    payload_as_text = json.dumps(
+        hash_payload,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+    return hashlib.blake2b(
+        payload_as_text.encode("utf-8"),
+        digest_size=8,
+    ).hexdigest()
+
+
+def make_run_metadata(args, raw_cost_multipliers):
+    """
+    Create metadata and a hash-based run ID for one sampled configuration.
+    """
+    hash_log10_decimals = getattr(args, "hash_log10_decimals", 8)
+    hash_relative_tolerance = getattr(args, "hash_relative_tolerance", None)
+
+    canonical_multipliers, canonical_log10 = canonicalize_cost_multipliers(
+        raw_cost_multipliers,
+        log10_decimals=hash_log10_decimals,
+        relative_tolerance=hash_relative_tolerance,
+    )
+
+    changed_cost_params = sorted(canonical_multipliers.keys())
+    changed_technologies = sorted(map(str, args.changed_technologies))
+
+    hash_payload = {
+        "changed_cost_params": changed_cost_params,
+        "changed_technologies": changed_technologies,
+        "canonical_log10_cost_multipliers": canonical_log10,
+        "model_version": getattr(args, "model_version", "unknown"),
+        "data_version": getattr(args, "data_version", "unknown"),
+    }
+
+    run_id = make_run_id(hash_payload)
+
+    metadata = {
+        "run_id": run_id,
+        "raw_cost_multipliers": raw_cost_multipliers,
+        "canonical_cost_multipliers": canonical_multipliers,
+        "canonical_log10_cost_multipliers": canonical_log10,
+        "changed_cost_params": changed_cost_params,
+        "changed_technologies": changed_technologies,
+        "sampling_method": getattr(args, "sampling_method", "sobol"),
+        "sampling_seed": getattr(args, "sampling_seed", 42),
+        "num_of_optimization": int(args.num_of_optimization),
+        "hash_log10_decimals": hash_log10_decimals,
+        "hash_relative_tolerance": hash_relative_tolerance,
+        "hash_payload": hash_payload,
+    }
+
+    return run_id, metadata
+
+
+def apply_multiple_cost_changes(costs_generator, technologies, cost_multipliers):
+    """
+    Apply multiple cost changes to the same cost dictionary before optimization.
+
+    The optimization is called only once after all requested cost parameters
+    have been modified.
+    """
+    for cp, multiplier in cost_multipliers.items():
+        change_costs(
+            costs_generator,
+            technologies=technologies,
+            cost_params=[cp],
+            allow_rand_seed=False,
+            function="constant",
+            x=multiplier,
+        )
