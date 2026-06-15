@@ -35,7 +35,7 @@ tech_colors = {
     'Fusion': '#F50057',           # Vivid Pink/Deep Rose
     # Storages:
     'Pumped Storage Actual':'#0000FF',
-    'Storage Actual ':'#FF0000', # Due to a typo a version exists with a scape at the end
+    'Storage Actual ':'#FF0000', # Due to a typo a version exists with a space at the end
     'Storage Actual':'#FF0000'
 }
 
