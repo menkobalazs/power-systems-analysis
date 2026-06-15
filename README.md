@@ -50,7 +50,7 @@ pip install -r requirements.txt
 
 ### Dependencies
 
-`pypsa`, `pandas`, `numpy`, `matplotlib`, `plotly`, `seaborn`, `scipy`, `linopy`, `openpyxl`, `nbformat`
+`pypsa`, `pandas`, `numpy`, `matplotlib`, `plotly`, `seaborn`, `scipy`, `linopy`, `openpyxl`, `nbformat`, `scikit-learn`
 
 ## Project Structure
 
