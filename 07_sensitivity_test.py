@@ -58,7 +58,7 @@ parser.add_argument('-c', "--changed_cost_params",
                     )
 parser.add_argument('-t', "--changed_technologies", 
                     nargs="+", 
-                    default=list(tech_colors.keys())[:-2],
+                    default=list(tech_colors.keys())[:13],
                     help="Technologies whose costs are modified. \nDefault: all technolies."
                     )
 parser.add_argument('-s', "--save_path", 
