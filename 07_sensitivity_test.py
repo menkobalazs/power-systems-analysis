@@ -94,7 +94,7 @@ parser.add_argument("--use_cost_boundaries",
                     action=argparse.BooleanOptionalAction,
                     help="Use precalculated boundaries. \nDefault: True"
                     )
-parser.add_argument("--cost_boundaries_dict", 
+parser.add_argument("--cost_boundaries_path", 
                     type=str, 
                     default='data/sensitivity_test/cost_boundaries.json',
                     help="Directory to load boundaries. \nDefault: 'data/sensitivity_test/cost_boundaries.json'"

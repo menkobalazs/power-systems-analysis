@@ -241,7 +241,7 @@ def calc_diff(data, min_diff=10):
 
 def load_cost_boundaries(args):
     """Load cost boundaries only once, if requested."""
-    with open(args.cost_boundaries_dict, "r", encoding="utf-8") as file:
+    with open(args.cost_boundaries_path, "r", encoding="utf-8") as file:
         return json.load(file)
 
 def get_sampling_bounds_for_cost_param(args, cp, cost_boundaries_dict):
@@ -282,13 +282,12 @@ def create_cost_multiplier_design(args, changed_cost_params):
     """
     n_samples = args.num_of_optimization
     n_dimensions = len(changed_cost_params)
-    cost_boundaries_dict = load_cost_boundaries(args)
 
     bounds = {}
     scales = {}
 
     for cp in changed_cost_params:
-        lower, upper, scale = get_sampling_bounds_for_cost_param(args=args, cp=cp, cost_boundaries_dict=cost_boundaries_dict)
+        lower, upper, scale = get_sampling_bounds_for_cost_param(args=args, cp=cp, cost_boundaries_dict=load_cost_boundaries(args))
         bounds[cp] = (lower, upper)
         scales[cp] = scale
 
@@ -356,7 +355,6 @@ def make_run_metadata(args, raw_cost_multipliers):
 
     metadata = {
         "run_id": run_id,
-        #"raw_cost_multipliers": args.cost_multipliers,
         "canonical_cost_multipliers": canonical_multipliers,
         "canonical_log10_cost_multipliers": canonical_log10,
         "changed_cost_params": changed_cost_params,
