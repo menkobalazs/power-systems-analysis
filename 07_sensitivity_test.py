@@ -80,7 +80,7 @@ parser.add_argument('-p', "--parallel_cost_param_change",
                     type=bool, 
                     default=False,
                     action=argparse.BooleanOptionalAction,
-                    help="** \nDefault: False"
+                    help="Sample multiple cost params simultaneously (vs. one-by-one sweeps). \nDefault: False"
                     )
 parser.add_argument('-m', "--sampling_method",
                     type=str,
@@ -92,12 +92,12 @@ parser.add_argument("--use_cost_boundaries",
                     type=bool, 
                     default=True,
                     action=argparse.BooleanOptionalAction,
-                    help="** \nDefault: True"
+                    help="Use precalculated boundaries. \nDefault: True"
                     )
 parser.add_argument("--cost_boundaries_dict", 
                     type=str, 
                     default='data/sensitivity_test/cost_boundaries.json',
-                    help="Directory to save resulting network files. \nDefault: 'data/sensitivity_test/cost_boundaries.json'"
+                    help="Directory to load boundaries. \nDefault: 'data/sensitivity_test/cost_boundaries.json'"
                     )
 args = parser.parse_args()
 if args.interpret_limit_as_exponents:
