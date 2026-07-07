@@ -103,7 +103,7 @@ def plot_generator_t(network, dates, season, day, colors=tech_colors, country=No
                        np.round(generators_t_p.sum(axis=1).max(), -2)+100)
     ax.legend(bbox_to_anchor=(1, 1), loc='upper left', fontsize=7)
     ax.set_xlabel('Time [h]')
-    ax.set_ylabel('Power [MWh]')
+    ax.set_ylabel('Power [MW]')
     ax.set_title(f"Optimal Energy Generation Dispatch\n{list(seasons.keys())[season-1]} -- Day {day}"+\
                  (f" -- Country {country}" if country is not None else "")
                 )
@@ -152,7 +152,7 @@ def plot_generator_t_plotly(network, dates, season, colors, savefig=''):
     fig.update_layout(
         title=title, barmode='stack', template='plotly_white', hovermode='x unified',
         xaxis=dict(title='Time', rangeslider=dict(visible=True), type='date'),
-        yaxis=dict(title='Power [MWh]'),
+        yaxis=dict(title='Power [MW]'),
         legend=dict(font=dict(size=10), orientation="v", yanchor="top", y=1, xanchor="left", x=1.02),
         margin=dict(l=50, r=150, t=80, b=50)
     )
@@ -236,7 +236,7 @@ def create_lineplot(data, title, xlim=None, savefig=''):
     plt.legend(title='Technologies', bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=10)
     plt.title(f"Impact of {title} Cost", fontsize=16)
     plt.xlabel('Cost Multiplier', fontsize=12)
-    plt.ylabel(r'Optimised capacity [MWh]', fontsize=12)
+    plt.ylabel('Built-in Power [MW]', fontsize=12)
     plt.tight_layout()
     if savefig: plt.savefig(savefig, bbox_inches='tight')
     plt.show()
@@ -253,7 +253,7 @@ def create_heatmap(data, title='', savefig=''):
     """
     plt.figure(figsize=(12,6))
     norm = colors.SymLogNorm(linthresh=1.0, vmin=data.min().min(), vmax=data.max().max(), base=10)
-    ax = sns.heatmap(data, cmap='coolwarm', norm=norm, cbar_kws={'label': r'Normalized optimised capacity [MWh]'} )
+    ax = sns.heatmap(data, cmap='coolwarm', norm=norm, cbar_kws={'label': r'$\Delta$P [MW]'} )
     plt.title(f"Impact of {title} Cost", fontsize=16)
     plt.xlabel('Cost Multiplier', fontsize=12)
     plt.ylabel("Power Plant Types", fontsize=12)
