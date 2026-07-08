@@ -115,7 +115,7 @@ def plot_generator_t(network, dates, season, day, colors=tech_colors, country=No
     plt.show()
     return None
 
-def plot_generator_t_plotly(network, dates, season, colors, savefig=''):
+def plot_generator_t_plotly(network, dates, season, colors, savefig='', demand=[]):
     """
     Plot the optimal energy generation dispatch for a specific season using Plotly, including storage unit activity.
 
@@ -131,18 +131,28 @@ def plot_generator_t_plotly(network, dates, season, colors, savefig=''):
     """
     os.makedirs("figures", exist_ok=True)
     title = f'Optimal Energy Generation - {season}'
-    if type(season) == str: 
+    if type(season) == str:
         season = seasons[season]
     if season < 1 or season > 4:
         raise ValueError("Season must be between 1 and 4.")
-    start = dates[season-1][0] 
+    start = dates[season-1][0]
     end = dates[season-1][-1]
-    df = network.generators_t.p.loc[start:end]
+    df = network.generators_t.p.loc[start:end]        
     df = df.loc[:, df.mean() > 0].copy()
     df = df[df.sum().sort_values(ascending=False).index]
     fig = go.Figure()
     for col in df.columns:
         fig.add_trace(go.Bar(x=df.index, y=df[col], name=col, marker_color=colors.get(col), offsetgroup=0))
+    if len(demand):
+        demand = np.asarray(demand)[(season-1)*7*24:season*7*24]
+        fig.add_trace(go.Scatter(
+            x=df.index,
+            y=demand,
+            mode='lines+markers',
+            name='Demand',
+            line=dict(color='black', dash='dash', width=2),
+            marker=dict(symbol='circle', size=6, color='black')
+        ))
     storage_p = network.storage_units_t.p.loc[start:end]
     active_storage = storage_p.columns[(storage_p != 0).any()]
     if not active_storage.empty:
