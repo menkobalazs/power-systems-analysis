@@ -86,9 +86,9 @@ def plot_generator_t(network, dates, season, day, colors=tech_colors, country=No
     else:
         generators_t_p = network.generators_t.p
         storage_units_t_p = network.storage_units_t.p
-    generators_t_p = generators_t_p.loc[start:end, generators_t_p.abs().sum() > 0]
+    generators_t_p = generators_t_p.loc[start:end, generators_t_p.abs().sum() > 0] # only active generators
     generators_t_p.index = generators_t_p.index.hour
-    generators_t_p = generators_t_p[generators_t_p.max().sort_values(ascending=False).index]# Sort columns by mean generation descending
+    generators_t_p = generators_t_p[generators_t_p.max().sort_values(ascending=False).index] # Sort columns by mean generation descending
     ax = generators_t_p.plot(kind='bar', figsize=(10,5), stacked=True, color=colors)
     if storage_units_t_p.shape[1]:
         storage_units_t_p = storage_units_t_p.loc[:, storage_units_t_p.abs().sum() > 0]  # only active storages
