@@ -110,7 +110,7 @@ def build_and_optimize_network(name, generator_costs, storage_costs, dates, dema
         )
 
     network.sanitize()
-    network.optimize(
+    network.meta['simulation_status'] = network.optimize(
         solver_name='highs', log_to_console=False,
         solver_options={'presolve': 'on', 'threads': 'all', 'solver': 'simplex'}
     )
