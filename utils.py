@@ -239,9 +239,9 @@ def calc_diff(data, min_diff=10):
     boundaries = np.where(diffs.loc['changes']>min_diff)[0][[0,-1]]
     return diffs, diffs.columns[boundaries].astype(float)
 
-def load_cost_boundaries(args):
-    """Load cost boundaries only once, if requested."""
-    with open(args.cost_boundaries_path, "r", encoding="utf-8") as file:
+def load_json_file(path):
+    """Load json file."""
+    with open(path, "r", encoding="utf-8") as file:
         return json.load(file)
 
 def get_sampling_bounds_for_cost_param(args, cp, cost_boundaries_dict):
@@ -287,7 +287,7 @@ def create_cost_multiplier_design(args, changed_cost_params):
     scales = {}
 
     for cp in changed_cost_params:
-        lower, upper, scale = get_sampling_bounds_for_cost_param(args=args, cp=cp, cost_boundaries_dict=load_cost_boundaries(args))
+        lower, upper, scale = get_sampling_bounds_for_cost_param(args=args, cp=cp, cost_boundaries_dict=load_json_file(args.cost_boundaries_path))
         bounds[cp] = (lower, upper)
         scales[cp] = scale
 

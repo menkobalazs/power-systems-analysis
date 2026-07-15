@@ -167,6 +167,9 @@ if not args.parallel_cost_param_change:
             change_costs(costs_generator, technologies=args.changed_technologies, cost_params=[cp], allow_rand_seed=False, function='constant', x=x)
             build_and_optimize_network(cp+'_'+str(np.round(x,7)), costs_generator, costs_storage, dates, demand, 
                                        potentials_generator, potentials_storage, profile_PV, profile_wind, args.save_path+cp+'/')
+
+###########################################################
+
 else:
     print('--- Start parallel optimizations. ---')
     designs = create_cost_multiplier_design(args=args, changed_cost_params=args.changed_cost_params)
