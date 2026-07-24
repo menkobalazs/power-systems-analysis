@@ -381,3 +381,14 @@ def apply_multiple_cost_changes(costs_generator, technologies, cost_multipliers)
             x=multiplier,
         )
     return None
+
+def load_nws_and_jsons(folder):
+    """
+    Load networks and json files from a given folder.
+    """
+    json_file = next(folder.glob("*.json"))
+    nc_file = next(folder.glob("*.nc"))
+    metadata = load_json_file(json_file)
+    network = pypsa.Network(nc_file)
+    p_nom_opt = pd.concat((network.generators["p_nom_opt"], network.storage_units["p_nom_opt"]))
+    return folder.name, {"metadata": metadata, "nw": network, "p_nom_opt": p_nom_opt}, p_nom_opt.to_numpy()
