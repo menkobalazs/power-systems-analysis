@@ -322,7 +322,7 @@ def create_cost_multiplier_design(args, changed_cost_params):
                 multiplier = sampled_value
             cost_multipliers[cp] = float(multiplier)
         designs.append(cost_multipliers)
-    return designs
+    return designs, bounds
 
 def canonicalize_cost_multipliers(cost_multipliers, log10_decimals=8):
     """
@@ -344,7 +344,7 @@ def make_run_id(hash_payload):
     payload_as_text = json.dumps(hash_payload, sort_keys=True, separators=(",", ":"))
     return hashlib.blake2b(payload_as_text.encode("utf-8"), digest_size=8).hexdigest()
 
-def make_run_metadata(args, raw_cost_multipliers):
+def make_run_metadata(args, raw_cost_multipliers, bounds):
     """
     Create metadata and a hash-based run ID for one sampled configuration.
     """
@@ -359,12 +359,11 @@ def make_run_metadata(args, raw_cost_multipliers):
     })
 
     metadata = {
-        "run_id": run_id,
+        "bounds": bounds,
         "canonical_cost_multipliers": canonical_multipliers,
-        "canonical_log10_cost_multipliers": canonical_log10,
         "changed_cost_params": changed_cost_params,
         "changed_technologies": args.changed_technologies,
-        "sampling_method": getattr(args, "sampling_method"),
+        "sampling_method": args.sampling_method,
     } 
     return run_id, metadata
 

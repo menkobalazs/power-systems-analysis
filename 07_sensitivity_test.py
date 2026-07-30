@@ -168,7 +168,7 @@ if args.sampling_method in ['lin', 'log']:
 
 elif args.sampling_method in ["sobol", "lhs"]:
     print('--- Start parallel optimizations. ---')
-    designs = create_cost_multiplier_design(args=args, changed_cost_params=args.changed_cost_params)
+    designs, bounds = create_cost_multiplier_design(args=args, changed_cost_params=args.changed_cost_params)
     run_root = Path(args.save_path) / ("multi-cost-"+"_".join(args.changed_cost_params))
     run_root.mkdir(parents=True, exist_ok=True)
 
@@ -176,7 +176,7 @@ elif args.sampling_method in ["sobol", "lhs"]:
     skipped_existing, skipped_duplicate_in_design = 0, 0
 
     for raw_cost_multipliers in designs:
-        run_id, metadata = make_run_metadata(args=args, raw_cost_multipliers=raw_cost_multipliers)
+        run_id, metadata = make_run_metadata(args=args, raw_cost_multipliers=raw_cost_multipliers, bounds=bounds)
         run_name = f"run_{run_id}"
         run_dir = run_root / run_id
         target_nc_path = run_dir / f"{run_name}.nc"
