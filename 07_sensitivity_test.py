@@ -134,8 +134,8 @@ print('--- Data loaded. ---')
 
 if args.create_baseline:
     print('--- Create baseline. ---')
-    network = build_and_optimize_network(args.baseline_name, costs_generator, costs_storage, dates, demand, 
-                                        potentials_generator, potentials_storage, profile_PV, profile_wind, args.save_path)
+    build_and_optimize_network(args.baseline_name, costs_generator, costs_storage, dates, demand, 
+                                        potentials_generator, potentials_storage, profile_PV, profile_wind, args.save_path+'/')
 
 ###########################################################
 
