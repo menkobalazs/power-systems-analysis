@@ -169,8 +169,7 @@ if args.sampling_method in ['lin', 'log']:
 elif args.sampling_method in ["sobol", "lhs"]:
     print('--- Start parallel optimizations. ---')
     designs, bounds = create_cost_multiplier_design(args=args, changed_cost_params=args.changed_cost_params)
-    run_root = Path(args.save_path) / ("multi-cost-"+"_".join(args.changed_cost_params))
-    run_root.mkdir(parents=True, exist_ok=True)
+    run_root = Path(args.save_path) 
 
     planned_runs, seen_run_ids, = [], set()
     skipped_existing, skipped_duplicate_in_design = 0, 0
