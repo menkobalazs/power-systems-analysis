@@ -291,10 +291,15 @@ def create_cost_multiplier_design(args, changed_cost_params):
     n_dimensions = len(changed_cost_params)
 
     bounds = {}
+    original_bounds = {}
     scales = {}
 
     for ccp in changed_cost_params:
         lower, upper, scale = get_sampling_bounds_for_cost_param(args=args, cost_param=ccp, cost_boundaries_dict=load_json_file(args.cost_boundaries_path))
+        original_bounds[ccp] = (lower, upper)
+        if scale != 'log10':
+            lower, upper = np.log10(lower), np.log10(upper)
+            scale = scale+'->log10'
         bounds[ccp] = (lower, upper)
         scales[ccp] = scale
 
@@ -315,14 +320,9 @@ def create_cost_multiplier_design(args, changed_cost_params):
         cost_multipliers = {}
         for j, cp in enumerate(changed_cost_params):
             lower, upper = bounds[cp]
-            sampled_value = lower + row[j] * (upper - lower)
-            if scales[cp] == "log10":
-                multiplier = 10 ** sampled_value
-            else:
-                multiplier = sampled_value
-            cost_multipliers[cp] = float(multiplier)
+            cost_multipliers[cp] = float(10**(lower + row[j] * (upper - lower)))
         designs.append(cost_multipliers)
-    return designs, bounds
+    return designs, original_bounds
 
 def canonicalize_cost_multipliers(cost_multipliers, log10_decimals=8):
     """
