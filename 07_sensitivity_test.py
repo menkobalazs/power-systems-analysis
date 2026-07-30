@@ -13,22 +13,52 @@ import json
 from pathlib import Path
 import os
 from glob import glob
+import warnings
 print('--- Packages imported. ---')
 
 ###########################################################
 
 parser = argparse.ArgumentParser(description="Run sensitivity analysis by scaling cost parameters across a range of multipliers.")
-parser.add_argument('-f', "--function", 
+parser.add_argument('-s', "--save_path", 
                     type=str, 
-                    choices=['lin', 'log'], 
+                    default='data/sensitivity_test/mixed/',
+                    help="Directory to save resulting network files. \nDefault: 'data/sensitivity_test/mixed/'"
+                    )
+parser.add_argument('-b', "--create_baseline", 
+                    type=bool, 
+                    default=False,
+                    action=argparse.BooleanOptionalAction,
+                    help="Create a baseline optimization run before the sensitivity scans. \nDefault: False"
+                    )
+parser.add_argument("--baseline_name", 
+                    type=str, 
+                    default='baseline_1',
+                    help="Name for the baseline network file. \nDefault: 'baseline_1'"
+                    )
+parser.add_argument('-m', "--sampling_method",
+                    type=str,
+                    choices=["lin", "log", "sobol", "lhs"],
                     required=True,
-                    help="Spacing function for cost multipliers: 'lin' for linear, 'log' for logarithmic."
+                    help="Sampling method for simulations. Sample single cost param with ['lin', 'log'] or multiple with ['sobol', 'lhs'] simultaneously. \nRequired.",
                     )
 parser.add_argument('-n', "--num_of_optimization", 
                     type=int, 
-                    default=41,
-                    help="Number of optimization runs (points in the multiplier range). \nDefault: 41"
+                    required=True,
+                    help="Number of optimization runs. \nRequired."
                     )
+
+parser.add_argument('-c', "--changed_cost_params", 
+                    nargs="+", 
+                    default=cost_params,
+                    help="Cost parameters to vary (capital, environment, operation, reliabiliy and risk). \nDefault: all cost types."
+                    )
+parser.add_argument('-t', "--changed_technologies", 
+                    nargs="+", 
+                    default=list(tech_colors.keys())[:13],
+                    help="Generator technologies whose costs are modified. \nDefault: all techonolgies."
+                    )
+########################################
+# SINGLE COST PARAM SIMULATION arguments
 parser.add_argument('-l', "--lower_limit", 
                     type=float, 
                     default=0.001,
@@ -50,49 +80,13 @@ parser.add_argument("--filtering_factor",
                     default=0.1,
                     help="Filtering factor for cost multipliers. \nDefault: 0.1"
                     )
-parser.add_argument('-c', "--changed_cost_params", 
-                    nargs="+", 
-                    default=cost_params,
-                    help="Cost parameters to vary (capital, environment, operation, reliabiliy and risk). \nDefault: all cost types."
-                    )
-parser.add_argument('-t', "--changed_technologies", 
-                    nargs="+", 
-                    default=list(tech_colors.keys())[:13],
-                    help="Technologies whose costs are modified. \nDefault: all technolies."
-                    )
-parser.add_argument('-s', "--save_path", 
-                    type=str, 
-                    default='data/sensitivity_test/mixed/',
-                    help="Directory to save resulting network files. \nDefault: 'data/sensitivity_test/mixed/'"
-                    )
-parser.add_argument('-b', "--create_baseline", 
-                    type=bool, 
-                    default=False,
-                    action=argparse.BooleanOptionalAction,
-                    help="Create a baseline optimization run before the sensitivity scans. \nDefault: False"
-                    )
-parser.add_argument("--baseline_name", 
-                    type=str, 
-                    default='baseline_1',
-                    help="Name for the baseline network file. \nDefault: 'baseline_1'"
-                    )
-parser.add_argument('-p', "--parallel_cost_param_change",
-                    type=bool, 
-                    default=False,
-                    action=argparse.BooleanOptionalAction,
-                    help="Sample multiple cost params simultaneously (vs. one-by-one sweeps). \nDefault: False"
-                    )
-parser.add_argument('-m', "--sampling_method",
-                    type=str,
-                    default="sobol",
-                    choices=["sobol", "lhs"],
-                    help="Sampling method for the multi-dimensional cost multiplier design.",
-                    )
+##########################################
+# MULTIPLE COST PARAM SIMULATION arguments
 parser.add_argument("--use_cost_boundaries",
                     type=bool, 
-                    default=True,
+                    default=False,
                     action=argparse.BooleanOptionalAction,
-                    help="Use precalculated boundaries. \nDefault: True"
+                    help="Use precalculated boundaries. \nDefault: False"
                     )
 parser.add_argument("--cost_boundaries_path", 
                     type=str, 
@@ -125,13 +119,15 @@ for week in week_numbers.values():
 
 ###########################################################
 
-potentials_generator = pd.read_excel(data_path, sheet_name='potentials_generator', index_col=0, na_values='None')
-potentials_storage = pd.read_excel(data_path, sheet_name='potentials_storage', index_col=0, na_values='None')
-costs_storage = pd.read_excel(data_path, sheet_name='costs_storage', index_col=0, na_values='None').to_dict()
-costs_generator = pd.read_excel(data_path, sheet_name='costs_generator', index_col=0, na_values='None').to_dict()
-profile_wind = pd.read_excel(data_path, sheet_name='profile_wind', names=list(week_numbers.keys()), header=None, index_col=0)
-profile_PV = pd.read_excel(data_path, sheet_name='profile_PV', names=list(week_numbers.keys()), header=None, index_col=0)
-demand = pd.read_excel(data_path, sheet_name='demand').values.ravel()
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=UserWarning, module="openpyxl")
+    potentials_generator = pd.read_excel(data_path, sheet_name='potentials_generator', index_col=0, na_values='None')
+    potentials_storage = pd.read_excel(data_path, sheet_name='potentials_storage', index_col=0, na_values='None')
+    costs_storage = pd.read_excel(data_path, sheet_name='costs_storage', index_col=0, na_values='None').to_dict()
+    costs_generator = pd.read_excel(data_path, sheet_name='costs_generator', index_col=0, na_values='None').to_dict()
+    profile_wind = pd.read_excel(data_path, sheet_name='profile_wind', names=list(week_numbers.keys()), header=None, index_col=0)
+    profile_PV = pd.read_excel(data_path, sheet_name='profile_PV', names=list(week_numbers.keys()), header=None, index_col=0)
+    demand = pd.read_excel(data_path, sheet_name='demand').values.ravel()
 print('--- Data loaded. ---')
 
 ###########################################################
@@ -143,7 +139,7 @@ if args.create_baseline:
 
 ###########################################################
 
-if not args.parallel_cost_param_change:
+if args.sampling_method in ['lin', 'log']:
     print('--- Start solo optimizations. ---')
     for cp in cost_params:
        os.makedirs(args.save_path+'/'+cp, exist_ok=True)
@@ -170,7 +166,7 @@ if not args.parallel_cost_param_change:
 
 ###########################################################
 
-else:
+elif args.sampling_method in ["sobol", "lhs"]:
     print('--- Start parallel optimizations. ---')
     designs = create_cost_multiplier_design(args=args, changed_cost_params=args.changed_cost_params)
     run_root = Path(args.save_path) / ("multi-cost-"+"_".join(args.changed_cost_params))
@@ -214,5 +210,7 @@ else:
                                     cost_multipliers=run["metadata"]["canonical_cost_multipliers"])
         build_and_optimize_network(run["run_name"], costs_generator_copy, costs_storage, dates, demand, potentials_generator,
                                    potentials_storage, profile_PV, profile_wind, str(run["run_dir"]) + os.sep, save_meta_data=run["metadata"])
+else:
+    raise ValueError(f"Unknown sampling method. Use one from ['lin', 'log', 'sobol', 'lhs']. Got: {args.sampling_method}")
 
 print(f'--- Optimizations are done. ---')

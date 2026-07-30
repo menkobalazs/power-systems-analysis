@@ -111,6 +111,7 @@ def build_and_optimize_network(name, generator_costs, storage_costs, dates, dema
 
     network.sanitize()
     network.meta['simulation_status'] = network.optimize(
+        include_objective_constant=False,
         solver_name='highs', log_to_console=False,
         solver_options={'presolve': 'on', 'threads': 'all', 'solver': 'simplex'}
     )
@@ -241,10 +242,14 @@ def calc_diff(data, min_diff=10):
 
 def load_json_file(path):
     """Load json file."""
-    with open(path, "r", encoding="utf-8") as file:
-        return json.load(file)
+    try:
+        with open(path, "r", encoding="utf-8") as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"Error loading JSON file from {path}: {e}")
+            return None
 
-def get_sampling_bounds_for_cost_param(args, cp, cost_boundaries_dict):
+def get_sampling_bounds_for_cost_param(args, cost_param, cost_boundaries_dict):
     """
     Return lower and upper sampling bounds for one cost parameter.
 
@@ -252,25 +257,27 @@ def get_sampling_bounds_for_cost_param(args, cp, cost_boundaries_dict):
     For linear sampling, bounds are returned in the original multiplier space.
     """
     if args.use_cost_boundaries:
-        lower_limit, upper_limit = [float(x) for x in cost_boundaries_dict[cp]]
+        lower_limit, upper_limit = [float(x) for x in cost_boundaries_dict[cost_param]]
     else:
         lower_limit, upper_limit = float(args.lower_limit), float(args.upper_limit)
     if lower_limit > upper_limit:
         lower_limit, upper_limit = upper_limit, lower_limit
-    if args.function == "log":
+    if args.sampling_method == "log":
         if lower_limit <= 0 or upper_limit <= 0:
-            raise ValueError(f"Logarithmic sampling requires positive bounds for {cp}. Got lower={lower_limit}, upper={upper_limit}.")
+            raise ValueError(f"Logarithmic sampling requires positive bounds for {cost_param}. Got lower={lower_limit}, upper={upper_limit}.")
         if not args.interpret_limit_as_exponents:
             lower_limit = np.log10(lower_limit)
             upper_limit = np.log10(upper_limit)
         scale = "log10"
-    elif args.function == "lin":
+    elif args.sampling_method == "lin":
         if args.interpret_limit_as_exponents:
             lower_limit = 10 ** lower_limit
             upper_limit = 10 ** upper_limit
         scale = "linear"
+    elif args.sampling_method in ['sobol', 'lhs']:
+        scale='undefined' 
     else:
-        raise ValueError(f"Unknown sampling function: {args.function}")
+        raise ValueError(f"Unknown sampling method: {args.sampling_method}")
     return lower_limit, upper_limit, scale
 
 def create_cost_multiplier_design(args, changed_cost_params):
@@ -286,23 +293,21 @@ def create_cost_multiplier_design(args, changed_cost_params):
     bounds = {}
     scales = {}
 
-    for cp in changed_cost_params:
-        lower, upper, scale = get_sampling_bounds_for_cost_param(args=args, cp=cp, cost_boundaries_dict=load_json_file(args.cost_boundaries_path))
-        bounds[cp] = (lower, upper)
-        scales[cp] = scale
+    for ccp in changed_cost_params:
+        lower, upper, scale = get_sampling_bounds_for_cost_param(args=args, cost_param=ccp, cost_boundaries_dict=load_json_file(args.cost_boundaries_path))
+        bounds[ccp] = (lower, upper)
+        scales[ccp] = scale
 
-    sampling_method = getattr(args, "sampling_method", "sobol").lower()
-
-    if sampling_method == "sobol":
+    if args.sampling_method == "sobol":
         sampler = qmc.Sobol(d=n_dimensions, rng=42)
         # Sobol balance is best for powers of two.
         # We generate the next power of two and then keep the requested number.
         unit_samples = sampler.random_base2(m=int(np.ceil(np.log2(n_samples))))[:n_samples]
-    elif sampling_method in ["lhs", "latin_hypercube", "latin-hypercube"]:
+    elif args.sampling_method == "lhs":
         sampler = qmc.LatinHypercube(d=n_dimensions, rng=42)
         unit_samples = sampler.random(n=n_samples)
     else:
-        raise ValueError(f"Unknown sampling method. Use 'sobol' or 'lhs'. Got: {sampling_method}")
+        raise ValueError(f"Unknown sampling method. Use 'sobol' or 'lhs'. Got: {args.sampling_method}")
     
     designs = []
 
@@ -360,7 +365,6 @@ def make_run_metadata(args, raw_cost_multipliers):
         "changed_cost_params": changed_cost_params,
         "changed_technologies": args.changed_technologies,
         "sampling_method": getattr(args, "sampling_method"),
-        "num_of_optimization": int(args.num_of_optimization),
     } 
     return run_id, metadata
 
@@ -386,8 +390,11 @@ def load_nws_and_jsons(folder):
     """
     Load networks and json files from a given folder.
     """
-    json_file = next(folder.glob("*.json"))
-    nc_file = next(folder.glob("*.nc"))
+    json_file = next(folder.glob("*.json"), None)
+    nc_file = next(folder.glob("*.nc"), None)
+    if json_file is None or nc_file is None:
+        print(f'Missing data for folder {folder.name}')
+        return False
     metadata = load_json_file(json_file)
     network = pypsa.Network(nc_file)
     p_nom_opt = pd.concat((network.generators["p_nom_opt"], network.storage_units["p_nom_opt"]))
