@@ -309,8 +309,8 @@ def create_cost_multiplier_design(args, changed_cost_params):
         # We generate the next power of two and then keep the requested number.
         unit_samples = sampler.random_base2(m=int(np.ceil(np.log2(n_samples))))[:n_samples]
     elif args.sampling_method == "lhs":
-        sampler = qmc.LatinHypercube(d=n_dimensions, rng=42)
-        unit_samples = sampler.random(n=n_samples)
+        sampler = qmc.LatinHypercube(d=n_dimensions, rng=42, scramble=False)
+        unit_samples = sampler.random(n=n_samples, workers=-1)
     else:
         raise ValueError(f"Unknown sampling method. Use 'sobol' or 'lhs'. Got: {args.sampling_method}")
     
@@ -348,7 +348,6 @@ def make_run_metadata(args, raw_cost_multipliers, bounds):
     """
     Create metadata and a hash-based run ID for one sampled configuration.
     """
-
     canonical_multipliers, canonical_log10 = canonicalize_cost_multipliers(raw_cost_multipliers)
     changed_cost_params = sorted(canonical_multipliers.keys())
 
