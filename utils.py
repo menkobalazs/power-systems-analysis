@@ -42,6 +42,27 @@ tech_colors = {
     'Storage Actual':'#FF0000'
 }
 
+########################################
+### Download Generation from ENTSO-E ###
+########################################
+
+def entsoe_query_generation(client, start, end, country="HU", savepath=''):
+    months = pd.date_range(start, end, freq="MS", tz="UTC").tolist()
+    if months[-1] != end: months.append(end)
+    frames = []
+    for s, e in zip(months[:-1], months[1:]):
+        print(f"query {s} -> {e}")
+        chunk = client.query_generation(country, start=s, end=e, nett=True).resample("1h").mean()
+        frames.append(chunk)
+    df = pd.concat(frames, axis=0, sort=True)
+    df = df[~df.index.duplicated(keep="last")].sort_index()
+    df = df.reindex(sorted(df.columns), axis=1)
+    if savepath:
+        df.to_csv(savepath)
+        return None
+    else:
+        return df
+
 ######################################
 ### Network Optimizations Function ###
 ######################################
