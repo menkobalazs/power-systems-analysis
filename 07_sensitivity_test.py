@@ -2,7 +2,7 @@ print('--- Start script. ---')
 
 ###########################################################
 
-from utils import data_path, cost_params, week_numbers, tech_colors
+from utils import cost_params, week_numbers, tech_colors
 from utils import change_costs, build_and_optimize_network
 from utils import create_cost_multiplier_design, make_run_metadata, apply_multiple_cost_changes
 import numpy as np
@@ -14,6 +14,7 @@ from pathlib import Path
 import os
 from glob import glob
 import warnings
+data_path = 'data/Adatok_HU_2050.xlsx'
 print('--- Packages imported. ---')
 
 ###########################################################

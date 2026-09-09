@@ -17,7 +17,6 @@ np.random.seed(42) # fix random seed for reproducibility
 ### Constants and Configurations ###
 ####################################
 
-data_path = 'data/' + 'Adatok_HU_2050.xlsx'
 cost_params = ['capital', 'environment', 'operation', 'reliability', 'risk']
 week_numbers =  {'week_15':15, 'week_28':28, 'week_40':40, 'week_49':49}
 seasons = {'Spring': 1, 'Summer': 2, 'Autumn': 3, 'Winter': 4}
